@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:path_provider/path_provider.dart';
@@ -79,15 +80,20 @@ class _KuisSuaraViewState extends State<KuisSuaraView> {
     }
   }
 
+  RecordConfig _recordConfig() => kIsWeb
+      ? const RecordConfig(encoder: AudioEncoder.opus)
+      : const RecordConfig(encoder: AudioEncoder.aacLc);
+
   Future<void> _startRecording() async {
     try {
       if (!await _recorder.hasPermission()) {
         _snack('Izin mikrofon ditolak. Gunakan "Coba Mode Demo".');
         return;
       }
-      final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/rekaman_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+      final path = kIsWeb
+          ? 'rekaman_${DateTime.now().millisecondsSinceEpoch}.webm'
+          : '${(await getTemporaryDirectory()).path}/rekaman_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(_recordConfig(), path: path);
       setState(() {
         _recording = true;
         _seconds = 0;

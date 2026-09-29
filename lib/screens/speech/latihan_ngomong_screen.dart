@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:path_provider/path_provider.dart';
@@ -93,7 +94,9 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
       if (url.isNotEmpty) await _player.play(UrlSource(url));
     } on ApiException catch (e) {
       _snack(e.message);
-    } catch (_) {}
+    } catch (_) {
+      _snack('Gagal memutar audio contoh.');
+    }
   }
 
   Future<void> _toggleMic() async {
@@ -105,15 +108,20 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
     }
   }
 
+  RecordConfig _recordConfig() => kIsWeb
+      ? const RecordConfig(encoder: AudioEncoder.opus)
+      : const RecordConfig(encoder: AudioEncoder.aacLc);
+
   Future<void> _start() async {
     try {
       if (!await _recorder.hasPermission()) {
         _snack('Mikrofon tidak tersedia. Gunakan "Coba mode demo".');
         return;
       }
-      final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/ngomong_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+      final path = kIsWeb
+          ? 'ngomong_${DateTime.now().millisecondsSinceEpoch}.webm'
+          : '${(await getTemporaryDirectory()).path}/ngomong_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(_recordConfig(), path: path);
       setState(() {
         _recording = true;
         _elapsed = Duration.zero;

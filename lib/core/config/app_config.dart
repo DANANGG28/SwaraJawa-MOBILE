@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Konfigurasi global aplikasi Sinau Jowo.
 ///
 /// Base URL dapat di-override saat build:
@@ -6,11 +8,20 @@ class AppConfig {
   static const String appName = 'Sinau Jowo';
   static const String appTagline = 'Platform Pasinaon';
 
-  /// Emulator Android memakai 10.0.2.2 untuk mengakses localhost host.
-  static const String baseUrl = String.fromEnvironment(
-    'SJ_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/api',
-  );
+  static const String _override = String.fromEnvironment('SJ_BASE_URL');
+
+  /// Base URL backend.
+  ///
+  /// - Jika di-override lewat `--dart-define=SJ_BASE_URL=...`, nilai itu dipakai.
+  /// - Web (browser) & desktop memakai `localhost`.
+  /// - Emulator Android memakai `10.0.2.2` (alias localhost host).
+  static String get baseUrl {
+    if (_override.isNotEmpty) return _override;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8000/api';
+    }
+    return 'http://localhost:8000/api';
+  }
 
   /// Origin (tanpa /api) untuk membangun URL aset storage.
   static String get origin {
@@ -29,7 +40,22 @@ class AppConfig {
 
   static String resolveUrl(String? path) {
     if (path == null || path.isEmpty) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      // Backend bisa mengembalikan URL dengan host internal (10.0.2.2).
+      // Ganti ke host aset yang bisa dijangkau klien saat ini.
+      final uri = Uri.parse(path);
+      if (uri.host == '10.0.2.2' || uri.host == '127.0.0.1') {
+        final base = Uri.parse(origin);
+        return uri
+            .replace(
+              scheme: base.scheme,
+              host: base.host,
+              port: base.hasPort ? base.port : null,
+            )
+            .toString();
+      }
+      return path;
+    }
     if (path.startsWith('/')) return '$origin$path';
     return '$origin/$path';
   }

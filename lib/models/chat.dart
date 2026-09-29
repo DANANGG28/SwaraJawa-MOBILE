@@ -43,7 +43,7 @@ class ChatMessageItem {
     }
     return ChatMessageItem(
       role: (json['role'] ?? 'assistant').toString(),
-      pesan: (json['pesan'] ?? json['jawaban'] ?? '').toString(),
+      pesan: (json['pesan'] ?? json['jawaban'] ?? json['message'] ?? '').toString(),
       sumber: sumber,
       waktu: json['waktu']?.toString(),
     );
@@ -64,16 +64,19 @@ class ChatAskResult {
   final String? sessionTitle;
 
   factory ChatAskResult.fromJson(Map<String, dynamic> json) {
-    final rawSumber = json['sumber'];
+    final map = (json['jawaban'] == null && json['data'] is Map)
+        ? Map<String, dynamic>.from(json['data'] as Map)
+        : json;
+    final rawSumber = map['sumber'];
     List<String> sumber = const [];
     if (rawSumber is List) {
       sumber = rawSumber.map((e) => e.toString()).toList();
     }
     return ChatAskResult(
-      jawaban: (json['jawaban'] ?? '').toString(),
+      jawaban: (map['jawaban'] ?? map['pesan'] ?? '').toString(),
       sumber: sumber,
-      sessionId: json['session_id'] == null ? null : asInt(json['session_id']),
-      sessionTitle: json['session_title']?.toString(),
+      sessionId: map['session_id'] == null ? null : asInt(map['session_id']),
+      sessionTitle: map['session_title']?.toString(),
     );
   }
 }

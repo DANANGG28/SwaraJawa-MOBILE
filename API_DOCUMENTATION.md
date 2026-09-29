@@ -11,7 +11,7 @@ Dokumentasi ini ditujukan bagi pengembang aplikasi mobile (Flutter) untuk mengon
 ### 1.1 Base URL
 - **Pengembangan Lokal (Emulator Android):** `http://10.0.2.2:8000/api`
 - **Pengembangan Lokal (Perangkat Fisik / LAN):** `http://<IP-KOMPUTER-ANDA>:8000/api`
-- **Produksi / Staging:** `https://sinau.urisowonbangkalan.tech/api`
+- **Produksi / Staging:** `https://sinau-app.my.id/api`
 
 ### 1.2 Header Standar HTTP
 Setiap request dari aplikasi Flutter **wajib** menyertakan header berikut:
