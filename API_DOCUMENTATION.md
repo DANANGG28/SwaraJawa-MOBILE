@@ -188,7 +188,82 @@ Mencabut token sesi yang sedang aktif.
 
 Sistem menggunakan hierarki 3-tingkat: **Topik** → **Unit (`level_materi`)** → **Bagian (`pembahasan`)** → **Butir Soal (`soal`)**.
 
-### 3.1 Daftar Unit Materi & Status Progres
+### 3.1 Daftar Topik
+Mengambil seluruh topik (tingkat teratas kurikulum) beserta ringkasan progresnya.
+- **Endpoint:** `GET /topik`
+- **Headers:** `Authorization: Bearer <token>`
+- **Status topik:** `'anyar'`, `'berjalan'`, atau `'selesai'`.
+
+**Respon Sukses (200 OK):**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "nama": "Basa Jawa Saben Dina",
+      "deskripsi": "Salam, sapaan, lan tembung-tembung padinan.",
+      "urutan": 1,
+      "total_unit": 2,
+      "unit_selesai": 0,
+      "total_soal": 20,
+      "lulus_count": 0,
+      "persen": 0,
+      "status": "anyar"
+    }
+  ]
+}
+```
+
+---
+
+### 3.2 Detail Topik (Unit & Bagian)
+Mengambil unit-unit dalam suatu topik, lengkap dengan **bagian (pembahasan)** di tiap unit.
+- **Endpoint:** `GET /topik/{topikId}`
+- **Headers:** `Authorization: Bearer <token>`
+- **Status unit:** `'terkunci'`, `'berjalan'`, atau `'selesai'`.
+- **Status bagian:** `'anyar'`, `'berjalan'`, atau `'selesai'`.
+
+**Respon Sukses (200 OK):**
+```json
+{
+  "data": {
+    "topik": { "id": 1, "nama": "Basa Jawa Saben Dina", "deskripsi": "...", "urutan": 1 },
+    "units": [
+      {
+        "id": 1,
+        "topik_id": 1,
+        "nama_materi": "Dasar",
+        "deskripsi": "...",
+        "urutan": 1,
+        "urutan_unit": 1,
+        "reward_exp": 100,
+        "jumlah_soal": 10,
+        "lulus_count": 0,
+        "persen": 0,
+        "jumlah_pembahasan": 2,
+        "status": "berjalan",
+        "pembahasan": [
+          {
+            "id": 1,
+            "nama": "Salam & Sapaan",
+            "deskripsi": "...",
+            "urutan": 1,
+            "jumlah_soal": 5,
+            "lulus_count": 0,
+            "persen": 0,
+            "status": "anyar",
+            "terkunci": false
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 3.3 Daftar Unit Materi & Status Progres
 Mengambil seluruh unit materi berurutan beserta status pembukaan untuk siswa yang login.
 - **Endpoint:** `GET /materi`
 - **Headers:** `Authorization: Bearer <token>`
@@ -234,10 +309,12 @@ Mengambil seluruh unit materi berurutan beserta status pembukaan untuk siswa yan
 
 ---
 
-### 3.2 Detail Unit Materi & Daftar Soal
+### 3.4 Detail Unit Materi & Daftar Soal
 Mengambil detail unit beserta butir soal di dalamnya untuk disajikan pada halaman kuis mobile.
 - **Endpoint:** `GET /materi/{levelMateriId}`
-- **Query Params:** `with_kunci=1` (opsional, hanya saat mode koreksi jika diizinkan).
+- **Query Params:**
+  - `with_kunci=1` (opsional, hanya saat mode koreksi jika diizinkan).
+  - `pembahasan_id={id}` (opsional, menyaring soal hanya untuk bagian tertentu).
 - **Headers:** `Authorization: Bearer <token>`
 
 **Respon Sukses (200 OK):**
@@ -283,9 +360,10 @@ Mengambil detail unit beserta butir soal di dalamnya untuk disajikan pada halama
 
 ---
 
-### 3.3 Mulai Sesi Kuis Unit
+### 3.5 Mulai Sesi Kuis Unit
 Memvalidasi apakah prasyarat unit sebelumnya sudah diselesaikan.
 - **Endpoint:** `POST /materi/{levelMateriId}/mulai`
+- **Query Params:** `pembahasan_id={id}` (opsional, memulai hanya bagian tertentu).
 - **Headers:** `Authorization: Bearer <token>`
 - **Respon Sukses (200 OK):** `{"message": "Sesi quiz dimulai.", "level_materi_id": 2}`
 - **Respon Error (403 Forbidden):** `{"message": "Materi belum tercapai. Selesaikan materi prasyarat terlebih dahulu."}`

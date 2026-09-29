@@ -8,6 +8,7 @@ import '../../core/config/app_config.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
+import '../../models/bagian.dart';
 import '../../models/level_materi.dart';
 import '../../models/quiz_result.dart';
 import '../../models/soal.dart';
@@ -22,9 +23,10 @@ import 'widgets/susun_view.dart';
 import 'widgets/tracing_view.dart';
 
 class QuizSessionScreen extends StatefulWidget {
-  const QuizSessionScreen({super.key, required this.level});
+  const QuizSessionScreen({super.key, required this.level, this.bagian});
 
   final LevelMateri level;
+  final Bagian? bagian;
 
   @override
   State<QuizSessionScreen> createState() => _QuizSessionScreenState();
@@ -60,8 +62,8 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
     });
     try {
       final state = context.read<AppState>();
-      await state.materi.mulai(widget.level.id);
-      final detail = await state.materi.detail(widget.level.id);
+      await state.materi.mulai(widget.level.id, bagianId: widget.bagian?.id);
+      final detail = await state.materi.detail(widget.level.id, bagianId: widget.bagian?.id);
       if (!mounted) return;
       setState(() {
         _detail = detail;
