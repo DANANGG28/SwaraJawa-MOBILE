@@ -17,6 +17,19 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+  final GlobalKey<LeaderboardScreenState> _leaderboardKey =
+      GlobalKey<LeaderboardScreenState>();
+  final GlobalKey<ProfileScreenState> _profileKey =
+      GlobalKey<ProfileScreenState>();
+
+  void _onTap(int i) {
+    final changed = i != _index;
+    setState(() => _index = i);
+    if (!changed) return;
+    // Muat ulang data saat tab dibuka agar EXP/lencana selalu segar.
+    if (i == 1) _leaderboardKey.currentState?.reload();
+    if (i == 4) _profileKey.currentState?.reload();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,17 +37,17 @@ class _MainShellState extends State<MainShell> {
       backgroundColor: AppColors.appBg,
       body: IndexedStack(
         index: _index,
-        children: const [
-          HomeScreen(),
-          LeaderboardScreen(),
-          LatihanNgomongScreen(),
-          ChatScreen(),
-          ProfileScreen(),
+        children: [
+          const HomeScreen(),
+          LeaderboardScreen(key: _leaderboardKey),
+          const LatihanNgomongScreen(),
+          const ChatScreen(),
+          ProfileScreen(key: _profileKey),
         ],
       ),
       bottomNavigationBar: SjBottomNav(
         currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        onTap: _onTap,
       ),
     );
   }

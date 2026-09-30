@@ -47,7 +47,6 @@ class _SusunViewState extends State<SusunView> {
       for (var i = 0; i < words.length; i++) _Token(uid: i, word: words[i]),
     ];
     _placed.clear();
-    widget.onChanged(null);
   }
 
   void _place(int uid) {

@@ -10,21 +10,69 @@ class TracingView extends StatefulWidget {
     super.key,
     required this.soal,
     required this.onChanged,
+    this.benar,
+    this.onExpandDone,
     this.onTts,
   });
 
   final Soal soal;
   final ValueChanged<dynamic> onChanged;
+
+  /// Status penilaian: null = belum diperiksa, true = benar, false = salah.
+  final bool? benar;
+
+  /// Dipanggil setelah animasi "mengembang" selesai (atau langsung bila tak ada
+  /// yang perlu dianimasikan) agar parent menampilkan kartu hasil.
+  final VoidCallback? onExpandDone;
   final VoidCallback? onTts;
 
   @override
   State<TracingView> createState() => _TracingViewState();
 }
 
-class _TracingViewState extends State<TracingView> {
+class _TracingViewState extends State<TracingView>
+    with SingleTickerProviderStateMixin {
   final List<List<Offset>> _strokes = [];
   List<Offset>? _current;
   String _status = 'Goresan Aktif';
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+  late final Animation<double> _expand = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutBack,
+  );
+
+  bool get _locked => widget.benar != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) widget.onExpandDone?.call();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant TracingView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.benar == true && oldWidget.benar != true) {
+      if (_strokes.isEmpty) {
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => widget.onExpandDone?.call());
+      } else {
+        _controller.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   void _push() {
     if (_strokes.isEmpty) {
@@ -40,6 +88,7 @@ class _TracingViewState extends State<TracingView> {
   }
 
   void _reset() {
+    if (_locked) return;
     setState(() {
       _strokes.clear();
       _current = null;
@@ -49,6 +98,7 @@ class _TracingViewState extends State<TracingView> {
   }
 
   Future<void> _snap() async {
+    if (_locked) return;
     setState(() {
       if (_strokes.isNotEmpty) {
         final last = _strokes.last;
@@ -207,28 +257,34 @@ class _TracingViewState extends State<TracingView> {
                       ),
                       child: GestureDetector(
                         onPanStart: (d) {
+                          if (_locked) return;
                           setState(() {
                             _current = [d.localPosition];
                             _strokes.add(_current!);
                           });
                         },
                         onPanUpdate: (d) {
+                          if (_locked) return;
                           setState(() {
                             _current?.add(d.localPosition);
                           });
                           _push();
                         },
                         onPanEnd: (_) {
+                          if (_locked) return;
                           _current = null;
                           _push();
                         },
-                        child: CustomPaint(
-                          painter: _TracingPainter(
-                            strokes: _strokes,
-                            guide: widget.soal.aksara,
-                            size: Size(width, height),
+                        child: AnimatedBuilder(
+                          animation: _expand,
+                          builder: (context, _) => CustomPaint(
+                            painter: _TracingPainter(
+                              strokes: _strokes,
+                              guide: widget.soal.aksara,
+                              t: _expand.value,
+                            ),
+                            child: const SizedBox.expand(),
                           ),
-                          child: const SizedBox.expand(),
                         ),
                       ),
                     ),
@@ -289,14 +345,21 @@ class _TracingViewState extends State<TracingView> {
 }
 
 class _TracingPainter extends CustomPainter {
-  _TracingPainter({required this.strokes, required this.guide, required this.size});
+  _TracingPainter({
+    required this.strokes,
+    required this.guide,
+    required this.t,
+  });
 
   final List<List<Offset>> strokes;
   final String guide;
-  final Size size;
+
+  /// Progres animasi "mengembang" (0 = goresan asli, 1 = memenuhi panduan).
+  final double t;
 
   @override
   void paint(Canvas canvas, Size canvasSize) {
+    Rect? guideRect;
     if (guide.isNotEmpty) {
       final tp = TextPainter(
         text: TextSpan(
@@ -308,13 +371,10 @@ class _TracingPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(
-        canvas,
-        Offset(
-          (canvasSize.width - tp.width) / 2,
-          (canvasSize.height - tp.height) / 2,
-        ),
-      );
+      final dx = (canvasSize.width - tp.width) / 2;
+      final dy = (canvasSize.height - tp.height) / 2;
+      tp.paint(canvas, Offset(dx, dy));
+      guideRect = Rect.fromLTWH(dx, dy, tp.width, tp.height);
     }
 
     final guidePaint = Paint()
@@ -331,6 +391,16 @@ class _TracingPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
+    final strokeBounds = _boundsOf(strokes);
+    final transform = _expandTransform(strokeBounds, guideRect, t);
+
+    canvas.save();
+    if (transform != null) {
+      canvas.translate(transform.center.dx, transform.center.dy);
+      canvas.scale(transform.scale);
+      canvas.translate(-transform.anchor.dx, -transform.anchor.dy);
+    }
+
     for (final s in strokes) {
       if (s.length < 2) continue;
       final path = Path()..moveTo(s.first.dx, s.first.dy);
@@ -340,8 +410,58 @@ class _TracingPainter extends CustomPainter {
       canvas.drawPath(path, guidePaint);
       canvas.drawPath(path, strokePaint);
     }
+
+    canvas.restore();
   }
 
+  Rect? _boundsOf(List<List<Offset>> strokes) {
+    Rect? bounds;
+    for (final s in strokes) {
+      for (final p in s) {
+        final r = Rect.fromCenter(center: p, width: 0, height: 0);
+        bounds = bounds == null ? r : bounds.expandToInclude(r);
+      }
+    }
+    return bounds;
+  }
+
+  _ExpandTransform? _expandTransform(Rect? strokeBounds, Rect? guideRect, double t) {
+    if (strokeBounds == null || guideRect == null) return null;
+    if (strokeBounds.width <= 0 || strokeBounds.height <= 0) return null;
+    if (guideRect.width <= 0 || guideRect.height <= 0) return null;
+
+    final targetScale = (guideRect.width / strokeBounds.width)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final targetScaleH = guideRect.height / strokeBounds.height;
+    final fitScale = targetScale < targetScaleH ? targetScale : targetScaleH;
+
+    final anchor = strokeBounds.center;
+    final target = guideRect.center;
+    return _ExpandTransform(
+      scale: _lerp(1.0, fitScale, t),
+      anchor: anchor,
+      center: Offset(_lerp(anchor.dx, target.dx, t), _lerp(anchor.dy, target.dy, t)),
+    );
+  }
+
+  double _lerp(double a, double b, double t) => a + (b - a) * t;
+
   @override
-  bool shouldRepaint(covariant _TracingPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _TracingPainter oldDelegate) =>
+      oldDelegate.t != t ||
+      oldDelegate.strokes != strokes ||
+      oldDelegate.guide != guide;
+}
+
+class _ExpandTransform {
+  const _ExpandTransform({
+    required this.scale,
+    required this.anchor,
+    required this.center,
+  });
+
+  final double scale;
+  final Offset anchor;
+  final Offset center;
 }

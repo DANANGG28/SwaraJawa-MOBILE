@@ -52,10 +52,12 @@ class AppConfig {
   static String resolveUrl(String? path) {
     if (path == null || path.isEmpty) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) {
-      // Backend bisa mengembalikan URL dengan host internal (10.0.2.2).
-      // Ganti ke host aset yang bisa dijangkau klien saat ini.
       final uri = Uri.parse(path);
-      if (uri.host == '10.0.2.2' || uri.host == '127.0.0.1') {
+      // Aset disimpan di disk `public` Laravel sehingga path-nya berawalan
+      // `/storage/`. URL absolut dari backend memakai `APP_URL`, yang bisa
+      // ber-host `localhost` (dev) atau domain lain yang tak dijangkau klien.
+      // Selalu layani aset dari host API yang sedang dipakai.
+      if (_isLoopbackHost(uri.host) || uri.path.startsWith('/storage/')) {
         final base = Uri.parse(origin);
         return uri
             .replace(
@@ -69,5 +71,10 @@ class AppConfig {
     }
     if (path.startsWith('/')) return '$origin$path';
     return '$origin/$path';
+  }
+
+  static bool _isLoopbackHost(String host) {
+    const loopback = {'localhost', '127.0.0.1', '0.0.0.0', '::1', '10.0.2.2'};
+    return loopback.contains(host);
   }
 }

@@ -155,17 +155,30 @@ class LatihanNgomongResult {
 }
 
 class TtsResult {
-  const TtsResult({this.audioUrl, this.durasiDetik, this.mock = false});
+  const TtsResult({
+    this.audioUrl,
+    this.durasiDetik,
+    this.mock = false,
+    this.audioBase64,
+    this.mime,
+  });
 
   final String? audioUrl;
   final double? durasiDetik;
   final bool mock;
+
+  /// Audio mentah (base64) dari `/speech/tts` — dipakai sebagai fallback
+  /// pemutaran bila URL tidak dapat dijangkau klien.
+  final String? audioBase64;
+  final String? mime;
 
   factory TtsResult.fromJson(Map<String, dynamic> json) {
     return TtsResult(
       audioUrl: json['audio_url']?.toString(),
       durasiDetik: json['durasi_detik'] == null ? null : asDouble(json['durasi_detik']),
       mock: json['mock'] == true,
+      audioBase64: json['audio_base64']?.toString(),
+      mime: json['mime']?.toString(),
     );
   }
 }
