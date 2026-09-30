@@ -8,6 +8,7 @@ import '../../core/config/app_config.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
+import '../../models/bagian.dart';
 import '../../models/level_materi.dart';
 import '../../models/quiz_result.dart';
 import '../../models/soal.dart';
@@ -22,9 +23,10 @@ import 'widgets/susun_view.dart';
 import 'widgets/tracing_view.dart';
 
 class QuizSessionScreen extends StatefulWidget {
-  const QuizSessionScreen({super.key, required this.level});
+  const QuizSessionScreen({super.key, required this.level, this.bagian});
 
   final LevelMateri level;
+  final Bagian? bagian;
 
   @override
   State<QuizSessionScreen> createState() => _QuizSessionScreenState();
@@ -44,7 +46,7 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(bagianId: widget.bagian?.id);
   }
 
   @override
@@ -53,20 +55,30 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({int? bagianId, bool widenFallback = true}) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final state = context.read<AppState>();
-      await state.materi.mulai(widget.level.id);
-      final detail = await state.materi.detail(widget.level.id);
+      var detail = await state.materi.mulaiSesi(widget.level.id, bagianId: bagianId);
+
+      // Bila bagian yang dipilih sudah tuntas, soal belum selesai bisa berada
+      // di bagian lain pada unit yang sama -> muat scope unit penuh.
+      if (widenFallback &&
+          detail.firstUnfinishedSoalId != null &&
+          !detail.soal.any((s) => s.id == detail.firstUnfinishedSoalId)) {
+        detail = await state.materi.mulaiSesi(widget.level.id);
+      }
+
       if (!mounted) return;
       setState(() {
         _detail = detail;
+        _index = _indexOfSoal(detail.soal, detail.firstUnfinishedSoalId);
+        _jawaban = null;
+        _result = null;
         _loading = false;
-        _index = 0;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -81,6 +93,13 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Posisi soal pertama yang belum selesai; fallback ke soal pertama.
+  int _indexOfSoal(List<Soal> list, int? soalId) {
+    if (soalId == null) return 0;
+    final i = list.indexWhere((s) => s.id == soalId);
+    return i >= 0 ? i : 0;
   }
 
   Soal? get _soal {
@@ -130,9 +149,36 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
     );
   }
 
-  void _next() {
-    final total = _detail?.soal.length ?? 0;
-    if (_index < total - 1) {
+  Future<void> _next() async {
+    final list = _detail?.soal ?? const <Soal>[];
+
+    // Navigasi berbasis server (setelah menjawab) — menyamai alur website.
+    if (_result != null) {
+      final nextId = _result!.nextSoalId;
+      if (nextId != null) {
+        final idx = list.indexWhere((s) => s.id == nextId);
+        if (idx >= 0) {
+          setState(() {
+            _index = idx;
+            _jawaban = null;
+            _result = null;
+          });
+          return;
+        }
+        // Soal berikutnya berada di bagian lain -> muat scope baru lalu lompat.
+        await _load(bagianId: _result!.nextPembahasanId, widenFallback: false);
+        if (!mounted) return;
+        final i2 = (_detail?.soal ?? const <Soal>[]).indexWhere((s) => s.id == nextId);
+        if (i2 >= 0) setState(() => _index = i2);
+        return;
+      }
+      // Tidak ada soal lanjutan -> seluruh unit tuntas.
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    // Belum dijawab (lompati): maju sekuensial.
+    if (_index < list.length - 1) {
       setState(() {
         _index++;
         _jawaban = null;

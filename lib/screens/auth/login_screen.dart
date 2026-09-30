@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
+import '../../services/google_auth_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/auth_widgets.dart';
 import '../../widgets/sj_widgets.dart';
@@ -24,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _remember = true;
   bool _loading = false;
+  bool _googleLoading = false;
   String? _error;
 
   @override
@@ -50,6 +52,30 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Terjadi kesalahan. Silakan coba lagi.');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _submitGoogle() async {
+    setState(() {
+      _error = null;
+      _googleLoading = true;
+    });
+    try {
+      final state = context.read<AppState>();
+      final idToken = await state.googleAuth.getIdToken();
+      if (idToken == null) return;
+      final user = await state.auth.loginWithGoogle(idToken: idToken);
+      await state.afterLogin(user);
+    } on GoogleAuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.firstError);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Gagal masuk dengan Google. Silakan coba lagi.');
+      }
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
     }
   }
 
@@ -128,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               upper: true,
                               loading: _loading,
                               radius: 16,
-                              onPressed: _loading ? null : _submit,
+                              onPressed: (_loading || _googleLoading) ? null : _submit,
                             ),
                             const SizedBox(height: 22),
                             _orDivider('atau'),
@@ -253,29 +279,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _googleButton() {
     return GestureDetector(
-      onTap: () => _showInfo('Masuk dengan Google saat ini hanya tersedia melalui website.'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.gray200),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const _GoogleIcon(),
-            const SizedBox(width: 12),
-            Text(
-              'MASUK DENGAN GOOGLE',
-              style: AppFonts.manrope(
-                size: 13,
-                weight: FontWeight.w800,
-                color: AppColors.black900,
-                letterSpacing: 0.4,
+      onTap: (_googleLoading || _loading) ? null : _submitGoogle,
+      child: Opacity(
+        opacity: (_googleLoading || _loading) ? 0.6 : 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.gray200),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_googleLoading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const _GoogleIcon(),
+              const SizedBox(width: 12),
+              Text(
+                _googleLoading ? 'MENGHUBUNGKAN...' : 'MASUK DENGAN GOOGLE',
+                style: AppFonts.manrope(
+                  size: 13,
+                  weight: FontWeight.w800,
+                  color: AppColors.black900,
+                  letterSpacing: 0.4,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

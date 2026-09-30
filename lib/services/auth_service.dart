@@ -19,6 +19,18 @@ class AuthService {
       'email': email,
       'password': password,
     });
+    return _persist(data);
+  }
+
+  /// Tukar Google ID token dengan token Sanctum melalui backend.
+  Future<AuthUser> loginWithGoogle({required String idToken}) async {
+    final data = await _client.postJson('/auth/google', data: {
+      'id_token': idToken,
+    });
+    return _persist(data);
+  }
+
+  Future<AuthUser> _persist(Map<String, dynamic> data) async {
     final token = data['token']?.toString();
     if (token != null) await TokenStorage.instance.write(token);
     final user = Map<String, dynamic>.from(data['user'] as Map? ?? {});

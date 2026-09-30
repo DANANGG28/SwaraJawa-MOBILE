@@ -1,15 +1,19 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/network/api_client.dart';
+import '../core/network/audio_bytes_stub.dart'
+    if (dart.library.io) '../core/network/audio_bytes_io.dart'
+    if (dart.library.html) '../core/network/audio_bytes_web.dart' as audio_bytes;
 import '../models/quiz_result.dart';
 
 class SpeechService {
   SpeechService(this._client);
 
   final ApiClient _client;
+
+  /// Web merekam dalam container WebM/Opus, mobile dalam M4A/AAC.
+  String get _recordFilename => kIsWeb ? 'rekaman.webm' : 'rekaman.m4a';
 
   Future<TtsResult> tts(String teks) async {
     final data = await _client.postJson('/speech/tts', data: {'teks': teks});
@@ -43,7 +47,12 @@ class SpeechService {
     bool demo = false,
   }) async {
     final form = FormData.fromMap({
-      'audio': demo ? 'demo' : await MultipartFile.fromFile(audioPath, filename: 'rekaman.m4a'),
+      'audio': demo
+          ? 'demo'
+          : MultipartFile.fromBytes(
+              await audio_bytes.readAudioBytes(audioPath),
+              filename: _recordFilename,
+            ),
       if (mockTranscript != null) 'mock_transcript': mockTranscript,
     });
     final data = await _client.postMultipart('/soal/$soalId/quiz-suara', formData: form);
@@ -57,15 +66,17 @@ class SpeechService {
     bool demo = false,
   }) async {
     final form = FormData.fromMap({
-      'audio': demo ? 'demo' : await MultipartFile.fromFile(audioPath, filename: 'rekaman.m4a'),
+      'audio': demo
+          ? 'demo'
+          : MultipartFile.fromBytes(
+              await audio_bytes.readAudioBytes(audioPath),
+              filename: _recordFilename,
+            ),
       if (mockTranscript != null) 'mock_transcript': mockTranscript,
     });
     final data = await _client.postMultipart('/soal/$soalId/latihan-ngomong', formData: form);
     return LatihanNgomongResult.fromJson(data);
   }
 
-  Future<String> audioBase64FromPath(String path) async {
-    final bytes = await File(path).readAsBytes();
-    return base64Encode(bytes);
-  }
+  Future<String> audioBase64FromPath(String path) => audio_bytes.audioBase64(path);
 }

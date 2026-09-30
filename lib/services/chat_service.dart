@@ -19,7 +19,10 @@ class ChatService {
 
   Future<List<ChatSessionInfo>> histori() async {
     final raw = await _client.dio.get('/chat/histori');
-    final data = raw.data;
+    var data = raw.data;
+    if (data is Map && data['data'] is List) {
+      data = data['data'];
+    }
     if (data is List) {
       return data
           .whereType<Map>()
@@ -31,7 +34,9 @@ class ChatService {
 
   Future<List<ChatMessageItem>> detailSesi(int sessionId) async {
     final data = await _client.getJson('/chat/sesi/$sessionId');
-    final session = Map<String, dynamic>.from(data['session'] ?? data);
+    final payload =
+        data['data'] is Map ? Map<String, dynamic>.from(data['data'] as Map) : data;
+    final session = Map<String, dynamic>.from(payload['session'] ?? payload);
     final raw = (session['messages'] ?? []) as List;
     return raw
         .whereType<Map>()

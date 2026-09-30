@@ -74,7 +74,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? const Center(child: CircularProgressIndicator(color: AppColors.primary600))
                     : ListView(
                         padding: const EdgeInsets.fromLTRB(14, 16, 14, 32),
-                        children: [_profileCard(siswa)],
+                        children: [
+                          _profileCard(siswa),
+                          const SizedBox(height: 16),
+                          _logoutButton(),
+                        ],
                       ),
               ),
             ),
@@ -136,6 +140,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => _confirmLogout(),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(color: AppColors.gray50, shape: BoxShape.circle),
+              child: const Icon(Symbols.logout, size: 20, color: Color(0xFFDC2626)),
+            ),
           ),
         ],
       ),
@@ -818,6 +832,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _logoutButton() {
+    return GestureDetector(
+      onTap: () => _confirmLogout(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.gray200, width: 2),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Symbols.logout, size: 20, color: Color(0xFFDC2626)),
+            const SizedBox(width: 8),
+            Text(
+              'KELUAR DARI AKUN',
+              style: AppFonts.epilogue(
+                size: 13,
+                weight: FontWeight.w800,
+                color: const Color(0xFFDC2626),
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

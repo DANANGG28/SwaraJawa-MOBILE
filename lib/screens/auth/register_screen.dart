@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
+import '../../services/google_auth_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/auth_widgets.dart';
 import '../../widgets/sj_widgets.dart';
@@ -29,6 +30,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscure1 = true;
   bool _obscure2 = true;
   bool _loading = false;
+  bool _googleLoading = false;
   String? _error;
 
   static const _kelasOptions = ['7A', '7B', '7C', '8A', '8B', '9A'];
@@ -64,6 +66,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _error = 'Terjadi kesalahan. Silakan coba lagi.');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _submitGoogle() async {
+    setState(() {
+      _error = null;
+      _googleLoading = true;
+    });
+    try {
+      final state = context.read<AppState>();
+      final idToken = await state.googleAuth.getIdToken();
+      if (idToken == null) return;
+      final user = await state.auth.loginWithGoogle(idToken: idToken);
+      await state.afterLogin(user);
+    } on GoogleAuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.firstError);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Gagal daftar dengan Google. Silakan coba lagi.');
+      }
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
     }
   }
 
@@ -221,7 +247,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               loading: _loading,
                               radius: 999,
                               backgroundColor: AppColors.primary700,
-                              onPressed: _loading ? null : _submit,
+                              onPressed: (_loading || _googleLoading) ? null : _submit,
                             ),
                             const SizedBox(height: 22),
                             Row(
@@ -419,30 +445,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _googleButton() {
     return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Daftar dengan Google hanya tersedia melalui website.'),
-            behavior: SnackBarBehavior.floating,
+      onTap: (_googleLoading || _loading) ? null : _submitGoogle,
+      child: Opacity(
+        opacity: (_googleLoading || _loading) ? 0.6 : 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
           ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Symbols.g_translate, size: 20, color: AppColors.onSurface),
-            const SizedBox(width: 10),
-            Text(
-              'Daftar dengan Google',
-              style: AppFonts.manrope(size: 13, weight: FontWeight.w700),
-            ),
-          ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_googleLoading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(Symbols.g_translate, size: 20, color: AppColors.onSurface),
+              const SizedBox(width: 10),
+              Text(
+                _googleLoading ? 'Menghubungkan...' : 'Daftar dengan Google',
+                style: AppFonts.manrope(size: 13, weight: FontWeight.w700),
+              ),
+            ],
+          ),
         ),
       ),
     );
