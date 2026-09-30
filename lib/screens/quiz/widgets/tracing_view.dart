@@ -35,6 +35,7 @@ class _TracingViewState extends State<TracingView>
   final List<List<Offset>> _strokes = [];
   List<Offset>? _current;
   String _status = 'Goresan Aktif';
+  Size _canvasSize = const Size(0, 0);
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -74,17 +75,45 @@ class _TracingViewState extends State<TracingView>
     super.dispose();
   }
 
+  /// Ruang koordinat ternormalisasi aksara panduan (padanan template web).
+  /// Goresan dikirim sebagai [x, y] relatif ke box ini agar sepadan dengan
+  /// `kunci_jawaban.paths` di backend.
+  Rect _guideBox() {
+    final guide = widget.soal.aksara;
+    if (guide.isEmpty || _canvasSize.height <= 0) {
+      return Rect.fromLTWH(0, 0, _canvasSize.width, _canvasSize.height);
+    }
+    final tp = TextPainter(
+      text: TextSpan(
+        text: guide,
+        style: TextStyle(fontSize: _canvasSize.height * 0.6),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final dx = (_canvasSize.width - tp.width) / 2;
+    final dy = (_canvasSize.height - tp.height) / 2;
+    return Rect.fromLTWH(dx, dy, tp.width, tp.height);
+  }
+
   void _push() {
     if (_strokes.isEmpty) {
       widget.onChanged(null);
-    } else {
-      widget.onChanged({
-        'strokes': [
-          for (final s in _strokes) [for (final p in s) {'x': p.dx, 'y': p.dy}],
-        ],
-        'template': const [],
-      });
+      return;
     }
+    final box = _guideBox();
+    widget.onChanged({
+      'strokes': [
+        for (final s in _strokes)
+          [
+            for (final p in s)
+              [
+                box.width > 0 ? (p.dx - box.left) / box.width : p.dx,
+                box.height > 0 ? (p.dy - box.top) / box.height : p.dy,
+              ],
+          ],
+      ],
+      'template': const [],
+    });
   }
 
   void _reset() {
@@ -242,6 +271,7 @@ class _TracingViewState extends State<TracingView>
                 builder: (context, constraints) {
                   final width = constraints.maxWidth;
                   const height = 440.0;
+                  _canvasSize = Size(width, height);
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
