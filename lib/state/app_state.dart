@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../core/network/api_client.dart';
 import '../models/siswa.dart';
 import '../services/auth_service.dart';
+import '../services/badge_service.dart';
 import '../services/chat_service.dart';
 import '../services/google_auth_service.dart';
 import '../services/kuis_service.dart';
@@ -25,6 +26,7 @@ class AppState extends ChangeNotifier {
     leaderboard = LeaderboardService(client);
     chat = ChatService(client);
     speech = SpeechService(client);
+    badge = BadgeService(client);
   }
 
   late final ApiClient client;
@@ -36,6 +38,7 @@ class AppState extends ChangeNotifier {
   late final LeaderboardService leaderboard;
   late final ChatService chat;
   late final SpeechService speech;
+  late final BadgeService badge;
 
   AuthStatus status = AuthStatus.loading;
   Siswa? siswa;

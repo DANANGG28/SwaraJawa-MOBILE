@@ -1,6 +1,11 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:record/record.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
@@ -26,6 +31,15 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _busy = false;
   bool _typing = false;
   bool _sessionsLoaded = false;
+
+  final AudioRecorder _recorder = AudioRecorder();
+  StreamSubscription<Amplitude>? _ampSub;
+  Timer? _maxTimer;
+  bool _recording = false;
+  bool _transcribing = false;
+  bool _hasSpoken = false;
+  int _silenceMs = 0;
+  DateTime? _micStart;
 
   static const _suggestions = <({String label, String prompt})>[
     (
@@ -55,6 +69,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _ampSub?.cancel();
+    _maxTimer?.cancel();
+    _recorder.dispose();
     _controller.dispose();
     _scroll.dispose();
     super.dispose();
@@ -230,6 +247,109 @@ class _ChatScreenState extends State<ChatScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
+  }
+
+  static const _speechThresholdDb = -38.0;
+  static const _silenceTimeoutMs = 1200;
+  static const _noSpeechTimeoutMs = 5000;
+  static const _maxRecordMs = 10000;
+
+  RecordConfig _micConfig() => kIsWeb
+      ? const RecordConfig(encoder: AudioEncoder.opus)
+      : const RecordConfig(encoder: AudioEncoder.aacLc);
+
+  Future<void> _toggleMic() async {
+    if (_transcribing) return;
+    if (_recording) {
+      await _stopMic();
+    } else {
+      await _startMic();
+    }
+  }
+
+  Future<void> _startMic() async {
+    try {
+      if (!await _recorder.hasPermission()) {
+        _snack('Izin mikrofon ditolak. Aktifkan izin mikrofon untuk aplikasi ini.');
+        return;
+      }
+      final path = kIsWeb
+          ? 'chat_${DateTime.now().millisecondsSinceEpoch}.webm'
+          : '${(await getTemporaryDirectory()).path}/chat_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(_micConfig(), path: path);
+      if (!mounted) return;
+      setState(() {
+        _recording = true;
+        _hasSpoken = false;
+        _silenceMs = 0;
+        _micStart = DateTime.now();
+      });
+      _ampSub = _recorder
+          .onAmplitudeChanged(const Duration(milliseconds: 200))
+          .listen(_onAmplitude);
+      _maxTimer = Timer(const Duration(milliseconds: _maxRecordMs), _stopMic);
+    } catch (_) {
+      _snack('Mikrofon tidak tersedia.');
+    }
+  }
+
+  void _onAmplitude(Amplitude a) {
+    if (!_recording) return;
+    if (a.current > _speechThresholdDb) {
+      _hasSpoken = true;
+      _silenceMs = 0;
+      return;
+    }
+    if (!_hasSpoken) {
+      final elapsed =
+          DateTime.now().difference(_micStart ?? DateTime.now()).inMilliseconds;
+      if (elapsed >= _noSpeechTimeoutMs) _stopMic();
+      return;
+    }
+    _silenceMs += 200;
+    if (_silenceMs >= _silenceTimeoutMs) _stopMic();
+  }
+
+  Future<void> _stopMic() async {
+    if (!_recording) return;
+    final speech = context.read<AppState>().speech;
+    final wasSpoken = _hasSpoken;
+    _maxTimer?.cancel();
+    _ampSub?.cancel();
+    _ampSub = null;
+    setState(() {
+      _recording = false;
+      _transcribing = true;
+    });
+    String? path;
+    try {
+      path = await _recorder.stop();
+    } catch (_) {}
+    try {
+      if (!wasSpoken) {
+        _snack('Tidak ada ucapan yang terdeteksi.');
+        return;
+      }
+      if (path == null) {
+        _snack('Rekaman gagal. Silakan coba lagi.');
+        return;
+      }
+      final b64 = await speech.audioBase64FromPath(path);
+      final text = (await speech.stt(b64)).trim();
+      if (!mounted) return;
+      if (text.isEmpty) {
+        _snack('Tidak ada ucapan yang terdeteksi.');
+        return;
+      }
+      _controller.text = text;
+      _controller.selection = TextSelection.collapsed(offset: text.length);
+    } on ApiException catch (e) {
+      _snack(e.message);
+    } catch (_) {
+      _snack('Gagal mengubah suara menjadi teks. Silakan coba lagi.');
+    } finally {
+      if (mounted) setState(() => _transcribing = false);
+    }
   }
 
   @override
@@ -536,11 +656,20 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Row(
               children: [
                 GestureDetector(
-                  onTap: () => _snack('Ketuk dan gunakan keyboard suara perangkat Anda.'),
-                  child: const SizedBox(
+                  onTap: _transcribing ? null : _toggleMic,
+                  child: SizedBox(
                     width: 36,
                     height: 36,
-                    child: Icon(Symbols.mic, size: 20, color: AppColors.gray500),
+                    child: _transcribing
+                        ? const Padding(
+                            padding: EdgeInsets.all(9),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            _recording ? Symbols.stop : Symbols.mic,
+                            size: 20,
+                            color: _recording ? AppColors.error : AppColors.gray500,
+                          ),
                   ),
                 ),
                 Expanded(
@@ -577,7 +706,11 @@ class _ChatScreenState extends State<ChatScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
             child: Text(
-              'Asisten Tanya Bahasa menjawab berdasarkan basis data korpus resmi sekolah.',
+              _recording
+                  ? 'Merekam… tap ikon berhenti untuk menghentikan'
+                  : _transcribing
+                      ? 'Mengubah suara menjadi teks…'
+                      : 'Asisten Tanya Bahasa menjawab berdasarkan basis data korpus resmi sekolah.',
               textAlign: TextAlign.center,
               style: AppFonts.manrope(size: 10, color: AppColors.gray500),
             ),

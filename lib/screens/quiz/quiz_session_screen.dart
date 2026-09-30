@@ -4,13 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/config/app_config.dart';
+import '../../core/audio/tts_playback.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
 import '../../models/bagian.dart';
 import '../../models/level_materi.dart';
 import '../../models/quiz_result.dart';
+import '../../models/siswa.dart';
 import '../../models/soal.dart';
 import '../../services/materi_service.dart';
 import '../../services/speech_service.dart';
@@ -41,6 +42,7 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
   JawabanResult? _result;
   bool _submitting = false;
   bool _muted = false;
+  bool _tracingFeedbackShown = false;
   final AudioPlayer _ttsPlayer = AudioPlayer();
 
   @override
@@ -77,6 +79,7 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
         _detail = detail;
         _index = _indexOfSoal(detail.soal, detail.firstUnfinishedSoalId);
         _jawaban = null;
+        _tracingFeedbackShown = false;
         _result = null;
         _loading = false;
       });
@@ -124,7 +127,13 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
           );
       if (!mounted) return;
       setState(() => _result = res);
-      _showFeedback(FeedbackModalData.fromResult(res));
+      _syncSiswaLocal(res);
+      if (soal.tipeEfektif == Soal.tipeMenulisAksara && res.benar) {
+        // Tunggu animasi "mengembang" goresan selesai -> kartu tampil dari
+        // _afterTracingExpand(). Jawaban salah / tipe lain tampil langsung.
+      } else {
+        _showFeedback(FeedbackModalData.fromResult(res));
+      }
     } on ApiException catch (e) {
       _snack(e.message);
     } catch (_) {
@@ -132,6 +141,29 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  void _syncSiswaLocal(JawabanResult res) {
+    final app = context.read<AppState>();
+    final current = app.siswa;
+    if (current == null) return;
+    app.updateSiswaLocal(
+      current.copyWith(
+        exp: ExpInfo(totalExp: res.totalExp),
+        strek: StrekInfo(
+          currentStreak: res.currentStreak,
+          highestStreak: res.highestStreak,
+        ),
+      ),
+    );
+  }
+
+  void _afterTracingExpand() {
+    if (_tracingFeedbackShown) return;
+    final res = _result;
+    if (res == null || !mounted) return;
+    _tracingFeedbackShown = true;
+    _showFeedback(FeedbackModalData.fromResult(res));
   }
 
   void _showFeedback(FeedbackModalData data) {
@@ -162,6 +194,7 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
             _index = idx;
             _jawaban = null;
             _result = null;
+            _tracingFeedbackShown = false;
           });
           return;
         }
@@ -183,6 +216,7 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
         _index++;
         _jawaban = null;
         _result = null;
+        _tracingFeedbackShown = false;
       });
     } else {
       Navigator.of(context).pop();
@@ -260,9 +294,9 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
       );
     }
     if (soal == null) {
-      return Center(
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(24),
           child: KuisEmptyCard(
             icon: Symbols.quiz,
             title: 'Belum ana soal',
@@ -304,6 +338,8 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
           child: TracingView(
             key: key,
             soal: soal,
+            benar: _result?.benar,
+            onExpandDone: _afterTracingExpand,
             onChanged: (j) => setState(() => _jawaban = j),
           ),
         );
@@ -404,12 +440,11 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
     try {
       final SpeechService speech = context.read<AppState>().speech;
       final res = await speech.tts(soal.pertanyaan);
-      final url = AppConfig.resolveUrl(res.audioUrl);
-      if (url.isEmpty) return;
-      await _ttsPlayer.stop();
-      await _ttsPlayer.play(UrlSource(url));
-    } catch (_) {
-      // Audio hanya pambantu — abaikan galat.
+      await TtsPlayback.playTts(_ttsPlayer, res);
+    } catch (e, s) {
+      // Audio hanya pambantu — catat galat agar terlihat di logcat.
+      debugPrint('[TTS] gagal memutar audio soal: $e');
+      debugPrintStack(stackTrace: s);
     }
   }
 }

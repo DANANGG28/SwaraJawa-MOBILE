@@ -11,15 +11,18 @@ class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
 
   @override
-  State<LeaderboardScreen> createState() => _LeaderboardScreenState();
+  State<LeaderboardScreen> createState() => LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends State<LeaderboardScreen> {
+class LeaderboardScreenState extends State<LeaderboardScreen> {
   String _scope = 'kelas';
   List<LeaderboardEntry> _entries = const [];
   LeaderboardEntry? _juaraSekolah;
   bool _loading = true;
   String? _error;
+
+  /// Dipakai MainShell untuk memuat ulang saat tab Papan Peringkat dibuka.
+  Future<void> reload() => _load();
 
   @override
   void initState() {

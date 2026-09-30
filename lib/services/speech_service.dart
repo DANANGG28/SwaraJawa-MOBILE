@@ -15,8 +15,16 @@ class SpeechService {
   /// Web merekam dalam container WebM/Opus, mobile dalam M4A/AAC.
   String get _recordFilename => kIsWeb ? 'rekaman.webm' : 'rekaman.m4a';
 
-  Future<TtsResult> tts(String teks) async {
-    final data = await _client.postJson('/speech/tts', data: {'teks': teks});
+  /// Content-Type multipart yang sesuai agar diterima Laravel `mimes` dan
+  /// ElevenLabs (webm/opus untuk web, m4a/AAC untuk Android/iOS).
+  DioMediaType get _recordContentType =>
+      kIsWeb ? DioMediaType('audio', 'webm') : DioMediaType('audio', 'mp4');
+
+  Future<TtsResult> tts(String teks, {String? voice}) async {
+    final data = await _client.postJson('/speech/tts', data: {
+      'teks': teks,
+      if (voice != null) 'voice': voice,
+    });
     return TtsResult.fromJson(data);
   }
 
@@ -52,6 +60,7 @@ class SpeechService {
           : MultipartFile.fromBytes(
               await audio_bytes.readAudioBytes(audioPath),
               filename: _recordFilename,
+              contentType: _recordContentType,
             ),
       if (mockTranscript != null) 'mock_transcript': mockTranscript,
     });
@@ -71,6 +80,7 @@ class SpeechService {
           : MultipartFile.fromBytes(
               await audio_bytes.readAudioBytes(audioPath),
               filename: _recordFilename,
+              contentType: _recordContentType,
             ),
       if (mockTranscript != null) 'mock_transcript': mockTranscript,
     });

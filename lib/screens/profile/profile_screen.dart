@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
+import '../../models/badge.dart';
 import '../../models/leaderboard_entry.dart';
 import '../../models/progres.dart';
 import '../../core/network/api_exception.dart';
@@ -15,14 +16,18 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  State<ProfileScreen> createState() => ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class ProfileScreenState extends State<ProfileScreen> {
   String _tab = 'badge';
   ProgresData? _progres;
+  BadgeCatalog _badges = const BadgeCatalog();
   int _myRank = 0;
   bool _loading = true;
+
+  /// Dipakai MainShell untuk memuat ulang saat tab Profil dibuka.
+  Future<void> reload() => _load();
 
   @override
   void initState() {
@@ -41,11 +46,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       } on ApiException {
         board = const [];
       }
+      BadgeCatalog badges = const BadgeCatalog();
+      try {
+        badges = await state.badge.ambil();
+      } on ApiException {
+        badges = const BadgeCatalog();
+      }
       final myId = state.siswa?.id;
       final myIndex = board.indexWhere((e) => e.siswaId == myId);
       if (!mounted) return;
       setState(() {
         _progres = progres;
+        _badges = badges;
         _myRank = myIndex >= 0 ? board[myIndex].peringkat : 0;
         _loading = false;
       });
@@ -517,24 +529,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _badgePanel(dynamic siswa) {
-    final ringkasan = _progres?.ringkasan;
-    final completed = ringkasan?.levelSelesai ?? 0;
-    final total = ringkasan?.totalLevel ?? 0;
-    final persen = total > 0 ? ((completed / total) * 100).round() : 0;
-
-    final badges = [
-      _BadgeData('Jawara Hanacaraka', _BadgeShape.hexagon, AppColors.yellow300, const Color(0xFF78350F), Symbols.emoji_events, 'LEVEL 1 • SELESAI', 'Sukses menulis dan menghafal 14 aksara nglegena dasar dengan presisi tinggi.', 'Akurasi Tracing: 96%', '+150 XP'),
-      _BadgeData('Tatas Unggah-Ungguh', _BadgeShape.pentagon, AppColors.green500, Colors.white, Symbols.check_circle, 'WICARA KRAMA • SELESAI', 'Menuntaskan percakapan Krama Inggil kepada guru dan orang tua dengan skor 92%.', 'Pelafalan STT: 92%', '+200 XP'),
-      _BadgeData('Prajurit Sandhangan', _BadgeShape.shield, AppColors.primary600, Colors.white, Symbols.shield, 'AKSARA JAWA • SELESAI', 'Paham penggunaan Wulu, Suku, Taling, dan Tarung dalam 20 kalimat latihan.', 'Kuis Pasangan: 100/100', '+180 XP'),
-      _BadgeData('Busana Gagrag Anyar', _BadgeShape.rhombus, AppColors.orange500, Colors.white, Symbols.star, 'BUDAYA JAWA • SELESAI', 'Menyelesaikan tebak busana adat: Jarik, Beskap, dan Blangkon Jawa Timur.', 'TTS Budaya: Selesai', '+120 XP'),
-      _BadgeData('Wicara Prigel', _BadgeShape.octagon, AppColors.primary500, Colors.white, Symbols.mic, 'AI STT RECOGNITION • SELESAI', 'Latihan pelafalan suara Jawa dengan kecerdasan buatan sebanyak 10 kali berturut-turut.', 'Evaluasi Suara AI', '+220 XP'),
-    ];
-
-    final locked = [
-      _BadgeData('Empu Aksara Murda & Swara', _BadgeShape.hexagon, AppColors.gray200, AppColors.gray500, Symbols.lock, 'LEVEL 3 • TERKUNCI', 'Selesaikan pembelajaran aksara murda, swara, dan rekan dengan nilai minimal 85.', 'Syarat: Tuntaskan Bab 3 Terlebih Dahulu', ''),
-      _BadgeData('Pujangga Paribasan', _BadgeShape.pentagon, AppColors.gray200, AppColors.gray500, Symbols.lock, 'PARIBASAN • TERKUNCI', 'Dapat menyelesaikan kuis peribahasa, bebasan, dan saloka dengan skor sempurna 100.', 'Syarat: Skor Kuis Peribahasa > 95', ''),
-      _BadgeData('Gathutkaca Streak Master', _BadgeShape.shield, AppColors.gray200, AppColors.gray500, Symbols.lock, 'KONSISTENSI • TERKUNCI', 'Raih streak belajar aktif tanpa henti selama 15 hari berturut-turut.', 'Syarat: 10 Hari lagi (Saat ini ${siswa.currentStreak}/15)', ''),
-    ];
+    final earned = _badges.earned.map(_toBadgeData).toList();
+    final locked = _badges.locked.map(_toBadgeData).toList();
+    final completed = _badges.earnedCount;
+    final total = _badges.totalCount;
+    final persen = _badges.completionPercentage;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -570,7 +569,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Text('Progres Pembelajaran', style: AppFonts.manrope(size: 11, weight: FontWeight.w600, color: AppColors.gray500)),
                         Text(
-                          '$completed dari $total Level ($persen%)',
+                          '$completed dari $total Lencana ($persen%)',
                           style: AppFonts.manrope(size: 11, weight: FontWeight.w800, color: AppColors.primary600),
                         ),
                       ],
@@ -610,7 +609,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        for (final b in badges) _badgeCard(b, locked: false),
+        for (final b in earned) _badgeCard(b, locked: false),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -618,7 +617,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Lencana yang Masih Terkunci (7)',
+                'Lencana yang Masih Terkunci (${locked.length})',
                 style: AppFonts.epilogue(size: 12, weight: FontWeight.w800),
               ),
             ),
@@ -628,6 +627,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
         for (final b in locked) _badgeCard(b, locked: true),
       ],
     );
+  }
+
+  _BadgeData _toBadgeData(BadgeItem b) {
+    final locked = !b.isUnlocked;
+    return _BadgeData(
+      b.nama,
+      _badgeShape(b.shape),
+      locked ? AppColors.gray200 : _hexColor(b.bgColor),
+      locked ? AppColors.gray500 : _badgeTextColor(b.textColor),
+      _badgeIcon(b.icon),
+      '${b.kategori} • ${locked ? 'TERKUNCI' : 'SELESAI'}',
+      b.deskripsi,
+      locked ? b.syaratText : b.earnedStatLeft,
+      locked ? '' : b.earnedStatRight,
+      progress: locked ? b.progressPercent : 100,
+    );
+  }
+
+  static _BadgeShape _badgeShape(String shape) {
+    switch (shape) {
+      case 'clip-pentagon':
+        return _BadgeShape.pentagon;
+      case 'clip-shield':
+        return _BadgeShape.shield;
+      case 'clip-rhombus':
+        return _BadgeShape.rhombus;
+      case 'clip-octagon':
+        return _BadgeShape.octagon;
+      case 'clip-hexagon':
+      default:
+        return _BadgeShape.hexagon;
+    }
+  }
+
+  static Color _hexColor(String hex) {
+    var h = hex.replaceFirst('#', '').trim();
+    if (h.length == 6) h = 'FF$h';
+    final v = int.tryParse(h, radix: 16);
+    return v == null ? AppColors.primary600 : Color(v);
+  }
+
+  static Color _badgeTextColor(String token) {
+    switch (token) {
+      case 'text-white':
+        return Colors.white;
+      case 'text-amber-950':
+        return const Color(0xFF451A03);
+      case 'text-amber-900':
+        return const Color(0xFF78350F);
+      case 'text-gray-500':
+        return AppColors.gray500;
+      default:
+        return Colors.white;
+    }
+  }
+
+  static IconData _badgeIcon(String name) {
+    const map = <String, IconData>{
+      'mic': Symbols.mic,
+      'history_edu': Symbols.history_edu,
+      'verified': Symbols.verified,
+      'format_list_numbered': Symbols.format_list_numbered,
+      'theater_comedy': Symbols.theater_comedy,
+      'record_voice_over': Symbols.record_voice_over,
+      'auto_stories': Symbols.auto_stories,
+      'psychology': Symbols.psychology,
+      'local_fire_department': Symbols.local_fire_department,
+      'stars': Symbols.stars,
+      'flag': Symbols.flag,
+    };
+    return map[name] ?? Symbols.military_tech;
   }
 
   Widget _badgeCard(_BadgeData b, {required bool locked}) {
@@ -706,6 +776,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
+          if (locked) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      height: 6,
+                      color: AppColors.gray200.withValues(alpha: 0.8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: (b.progress / 100).clamp(0.0, 1.0),
+                          child: Container(color: AppColors.primary500),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${b.progress}%',
+                  style: AppFonts.manrope(size: 10, weight: FontWeight.w800, color: AppColors.primary600),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -896,8 +994,9 @@ class _BadgeData {
     this.meta,
     this.description,
     this.footer,
-    this.footerValue,
-  );
+    this.footerValue, {
+    this.progress = 0,
+  });
 
   final String title;
   final _BadgeShape shape;
@@ -908,6 +1007,7 @@ class _BadgeData {
   final String description;
   final String footer;
   final String footerValue;
+  final int progress;
 }
 
 class _BadgeClipper extends CustomClipper<Path> {

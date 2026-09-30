@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 
-import '../../core/config/app_config.dart';
+import '../../core/audio/tts_playback.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
@@ -90,8 +90,12 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
     if (soal == null) return;
     try {
       final res = await context.read<AppState>().speech.tts(soal.teksReferensi);
-      final url = AppConfig.resolveUrl(res.audioUrl);
-      if (url.isNotEmpty) await _player.play(UrlSource(url));
+      final ok = await TtsPlayback.playTts(_player, res);
+      if (!ok) {
+        _snack('Gagal memutar audio contoh.');
+      } else if (res.mock) {
+        _snack('Audio contoh dalam mode mock (mesin TTS backend belum aktif).');
+      }
     } on ApiException catch (e) {
       _snack(e.message);
     } catch (_) {
@@ -160,9 +164,8 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
           );
       if (!mounted) return;
       setState(() => _result = res);
-      final url = AppConfig.resolveUrl(res.audioUrl);
-      if (url.isNotEmpty) {
-        await _player.play(UrlSource(url));
+      final ok = await TtsPlayback.playUrl(_player, res.audioUrl);
+      if (ok) {
         setState(() => _playing = true);
         _player.onPlayerComplete.listen((_) {
           if (mounted) setState(() => _playing = false);
@@ -493,11 +496,8 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                       await _player.stop();
                       setState(() => _playing = false);
                     } else {
-                      final url = AppConfig.resolveUrl(res.audioUrl);
-                      if (url.isNotEmpty) {
-                        await _player.play(UrlSource(url));
-                        setState(() => _playing = true);
-                      }
+                      final ok = await TtsPlayback.playUrl(_player, res.audioUrl);
+                      if (ok) setState(() => _playing = true);
                     }
                   },
                   child: Container(
