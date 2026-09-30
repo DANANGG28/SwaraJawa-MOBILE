@@ -31,6 +31,10 @@ class Soal {
     this.bobotExp = 0,
     this.soalLatin,
     this.soalAksara,
+    this.sudahDijawab = false,
+    this.skorTertinggi = 0,
+    this.lulus = false,
+    this.jumlahPercobaan = 0,
   });
 
   final int id;
@@ -45,6 +49,12 @@ class Soal {
   final int bobotExp;
   final String? soalLatin;
   final String? soalAksara;
+
+  /// Status pengerjaan milik siswa yang login (dari API website).
+  final bool sudahDijawab;
+  final int skorTertinggi;
+  final bool lulus;
+  final int jumlahPercobaan;
 
   static const tipePilihanGanda = 'pilihan_ganda';
   static const tipeSusunKalimat = 'susun_kalimat';
@@ -151,6 +161,10 @@ class Soal {
       bobotExp: asInt(json['bobot_exp']),
       soalLatin: json['soal_latin']?.toString(),
       soalAksara: json['soal_aksara']?.toString(),
+      sudahDijawab: json['sudah_dijawab'] == true,
+      skorTertinggi: asInt(json['skor_tertinggi']),
+      lulus: json['lulus'] == true,
+      jumlahPercobaan: asInt(json['jumlah_percobaan']),
     );
   }
 }

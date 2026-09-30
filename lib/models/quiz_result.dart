@@ -12,6 +12,8 @@ class JawabanResult {
     this.rewardExp = 0,
     this.levelSelesai = false,
     this.levelBerikutnya,
+    this.nextSoalId,
+    this.nextPembahasanId,
     this.totalExp = 0,
     this.currentStreak = 0,
     this.highestStreak = 0,
@@ -26,6 +28,13 @@ class JawabanResult {
   final int rewardExp;
   final bool levelSelesai;
   final String? levelBerikutnya;
+
+  /// Soal berikutnya yang ditentukan server (alur website, FR-23).
+  final int? nextSoalId;
+
+  /// Bagian (pembahasan) dari soal berikutnya, bila berpindah bagian.
+  final int? nextPembahasanId;
+
   final int totalExp;
   final int currentStreak;
   final int highestStreak;
@@ -58,6 +67,10 @@ class JawabanResult {
       rewardExp: asInt(json['reward_exp']),
       levelSelesai: json['level_selesai'] == true,
       levelBerikutnya: json['level_berikutnya']?.toString(),
+      nextSoalId: json['next_soal_id'] == null ? null : asInt(json['next_soal_id']),
+      nextPembahasanId: json['next_pembahasan_id'] == null
+          ? null
+          : asInt(json['next_pembahasan_id']),
       totalExp: asInt(json['total_exp']),
       currentStreak: asInt(json['current_streak']),
       highestStreak: asInt(json['highest_streak']),
