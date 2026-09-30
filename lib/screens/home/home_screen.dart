@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
@@ -39,6 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
+  String _sessionKey(int? siswaId) => 'session_topik_id_${siswaId ?? 0}';
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -48,14 +51,31 @@ class _HomeScreenState extends State<HomeScreen> {
       final state = context.read<AppState>();
       final topiks = await state.materi.daftarTopik();
       await state.refreshSiswa();
-      Topik? topik = _topik;
-      if (topik != null) {
-        topik = topiks.firstWhere((t) => t.id == topik!.id, orElse: () => topik!);
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = _sessionKey(state.siswa?.id);
+      final savedId = prefs.getInt(key);
+
+      Topik? topik;
+      if (_topik != null) {
+        topik = topiks.where((t) => t.id == _topik!.id).firstOrNull;
       }
-      TopikDetail? detail = _detail;
+      if (topik == null && savedId != null) {
+        topik = topiks.where((t) => t.id == savedId).firstOrNull;
+      }
+      // Alur persis website HomeController:
+      // 1. Ambil topik dari session
+      // 2. Jika belum ada, cari unit yang 'berjalan'
+      // 3. Fallback ke topik pertama
+      topik ??= topiks.where((t) => t.berjalan).firstOrNull ??
+          (topiks.isNotEmpty ? topiks.first : null);
+
+      TopikDetail? detail;
       if (topik != null) {
+        await prefs.setInt(key, topik.id);
         detail = await state.materi.detailTopik(topik.id);
       }
+
       if (!mounted) return;
       setState(() {
         _topiks = topiks;
@@ -79,7 +99,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
     try {
-      final detail = await context.read<AppState>().materi.detailTopik(topik.id);
+      final state = context.read<AppState>();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_sessionKey(state.siswa?.id), topik.id);
+
+      final detail = await state.materi.detailTopik(topik.id);
       if (!mounted) return;
       setState(() {
         _detail = detail;
@@ -222,6 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
     for (var u = 0; u < units.length; u++) {
       final unit = units[u];
       widgets.add(_unitBanner(topik, unit, isFirst: u == 0));
+      widgets.add(const SizedBox(height: 24));
 
       final specs = _nodeSpecs(unit, focusKey, profilKurang);
       widgets.add(_nodeChain(specs));
@@ -275,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return specs;
   }
 
-  static const List<double> _xPattern = [0.5, 0.74, 0.3];
+  static const List<double> _xPattern = [0.5, 0.70, 0.30];
 
   Widget _nodeChain(List<_NodeSpec> specs) {
     if (specs.isEmpty) return const SizedBox.shrink();
@@ -283,8 +308,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, constraints) {
         final w = constraints.maxWidth;
         final cardW = math.min(238.0, w * 0.74);
-        final minX = cardW / 2 + 2;
-        final maxX = w - cardW / 2 - 2;
+        final minX = 38.0 + 16.0;
+        final maxX = w - 38.0 - 16.0;
 
         double xFor(int i) {
           final frac = specs.length == 1 ? 0.5 : _xPattern[i % _xPattern.length];
@@ -304,22 +329,37 @@ class _HomeScreenState extends State<HomeScreen> {
                     done: specs[i - 1].done,
                   ),
                 ),
-              Padding(
-                padding: EdgeInsets.only(left: xFor(i) - cardW / 2),
-                child: SizedBox(
-                  width: cardW,
-                  child: Column(
-                    children: [
-                      if (specs[i].active) ...[
-                        const _MulaiPill(),
-                        const SizedBox(height: 10),
-                      ],
-                      _nodeCircle(specs[i]),
-                      const SizedBox(height: 12),
-                      _labelCard(specs[i]),
-                    ],
+              Column(
+                children: [
+                  SizedBox(
+                    width: w,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.only(left: math.max(0, xFor(i) - 120)),
+                        child: SizedBox(
+                          width: 240,
+                          child: Column(
+                            children: [
+                              if (specs[i].active) ...[
+                                const _MulaiPill(),
+                                const SizedBox(height: 10),
+                              ],
+                              _nodeCircle(specs[i]),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: SizedBox(
+                      width: cardW,
+                      child: _labelCard(specs[i]),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -519,7 +559,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'BAGIAN ${topik.urutan}, UNIT ${unit.urutanUnit}',
+                  'UNIT ${topik.urutan}, BAGIAN ${unit.urutanUnit}',
                   style: AppFonts.nunito(
                     size: 10,
                     weight: FontWeight.w900,
@@ -837,7 +877,7 @@ class _DashedConnectorState extends State<_DashedConnector>
           painter: _DashPainter(
             fromX: widget.fromX,
             toX: widget.toX,
-            phase: _controller.value * 18,
+            phase: _controller.value * 21.0,
             done: widget.done,
           ),
         );
@@ -862,9 +902,12 @@ class _DashPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final midY = size.height / 2;
-    final path = Path()
-      ..moveTo(fromX, 0)
-      ..cubicTo(fromX, midY, toX, midY, toX, size.height);
+    final path = Path()..moveTo(fromX, 0);
+    if ((fromX - toX).abs() < 1) {
+      path.lineTo(toX, size.height);
+    } else {
+      path.cubicTo(fromX, midY, toX, midY, toX, size.height);
+    }
 
     final base = Paint()
       ..style = PaintingStyle.stroke
@@ -881,15 +924,16 @@ class _DashPainter extends CustomPainter {
 
     const dashLen = 12.0;
     const gapLen = 9.0;
+    const period = dashLen + gapLen;
     for (final metric in path.computeMetrics()) {
-      var distance = -(phase % (dashLen + gapLen));
+      var distance = (phase % period) - period;
       while (distance < metric.length) {
         final start = distance.clamp(0.0, metric.length);
         final end = (distance + dashLen).clamp(0.0, metric.length);
         if (end > start) {
           canvas.drawPath(metric.extractPath(start, end), dash);
         }
-        distance += dashLen + gapLen;
+        distance += period;
       }
     }
   }

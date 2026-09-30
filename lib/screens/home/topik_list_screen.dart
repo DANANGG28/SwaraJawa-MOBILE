@@ -154,7 +154,7 @@ class TopikListContent extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'BAGIAN ${topik.urutan}',
+                      'UNIT ${topik.urutan}',
                       style: AppFonts.nunito(
                         size: 11,
                         weight: FontWeight.w900,
