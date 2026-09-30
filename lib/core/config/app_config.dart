@@ -10,6 +10,17 @@ class AppConfig {
 
   static const String _override = String.fromEnvironment('SJ_BASE_URL');
 
+  /// Google OAuth "Web application" client ID, dipakai sebagai `serverClientId`
+  /// agar Android mengembalikan `idToken` yang bisa diverifikasi backend.
+  ///
+  /// Isi saat build:
+  ///   flutter build apk --dart-define=SJ_GOOGLE_SERVER_CLIENT_ID=xxxx.apps.googleusercontent.com
+  static const String googleServerClientId =
+      String.fromEnvironment('SJ_GOOGLE_SERVER_CLIENT_ID');
+
+  /// Apakah login Google sudah dikonfigurasi (client ID tersedia).
+  static bool get isGoogleSignInConfigured => googleServerClientId.isNotEmpty;
+
   /// Base URL backend.
   ///
   /// - Jika di-override lewat `--dart-define=SJ_BASE_URL=...`, nilai itu dipakai.

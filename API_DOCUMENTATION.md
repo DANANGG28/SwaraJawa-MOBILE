@@ -184,6 +184,30 @@ Mencabut token sesi yang sedang aktif.
 
 ---
 
+### 2.6 Login dengan Google (Mobile)
+Menukar Google **ID token** (dari Google Sign-In native) menjadi token bearer Sanctum.
+- **Endpoint:** `POST /auth/google`
+- **Akses:** Publik
+- **Catatan:** ID token diperoleh aplikasi Android memakai `serverClientId` (Web OAuth client ID) dan diverifikasi di server (mis. `Socialite::driver('google')->stateless()->userFromToken()`).
+
+**Request Body (JSON):**
+```json
+{
+  "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+}
+```
+
+**Respon Sukses (200 OK):** Struktur sama dengan `POST /auth/login` (`role`, `user`, `token`). Bila akun Google belum terdaftar, server boleh membuat akun siswa otomatis (auto-register).
+
+**Respon Gagal (401/422):**
+```json
+{
+  "message": "Token Google tidak valid."
+}
+```
+
+---
+
 ## 3. Materi & Kurikulum Pembelajaran (Khusus Siswa)
 
 Sistem menggunakan hierarki 3-tingkat: **Topik** → **Unit (`level_materi`)** → **Bagian (`pembahasan`)** → **Butir Soal (`soal`)**.

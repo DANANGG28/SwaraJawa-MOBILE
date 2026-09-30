@@ -4,6 +4,7 @@ import '../core/network/api_client.dart';
 import '../models/siswa.dart';
 import '../services/auth_service.dart';
 import '../services/chat_service.dart';
+import '../services/google_auth_service.dart';
 import '../services/kuis_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/materi_service.dart';
@@ -17,6 +18,7 @@ class AppState extends ChangeNotifier {
     client = ApiClient.instance;
     client.onUnauthorized = _handleUnauthorized;
     auth = AuthService(client);
+    googleAuth = GoogleAuthService();
     materi = MateriService(client);
     kuis = KuisService(client);
     progres = ProgresService(client);
@@ -27,6 +29,7 @@ class AppState extends ChangeNotifier {
 
   late final ApiClient client;
   late final AuthService auth;
+  late final GoogleAuthService googleAuth;
   late final MateriService materi;
   late final KuisService kuis;
   late final ProgresService progres;
@@ -84,6 +87,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     await auth.logout();
+    await googleAuth.signOut();
     siswa = null;
     status = AuthStatus.unauthenticated;
     notifyListeners();
