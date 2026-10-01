@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_calendar_label">Sinau Jowo • Streak &amp; Kalender</string>
+    <string name="widget_calendar_desc">Kalender sinau lan capaian streak saben dina.</string>
+    <string name="widget_mini_label">Sinau Jowo • Streak</string>
+    <string name="widget_mini_desc">Streak sinau saben dina.</string>
+</resources>

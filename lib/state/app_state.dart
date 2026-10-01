@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../core/network/api_client.dart';
@@ -11,6 +13,7 @@ import '../services/leaderboard_service.dart';
 import '../services/materi_service.dart';
 import '../services/progres_service.dart';
 import '../services/speech_service.dart';
+import '../services/widget_service.dart';
 
 enum AuthStatus { loading, authenticated, unauthenticated }
 
@@ -55,6 +58,7 @@ class AppState extends ChangeNotifier {
         siswa = user.siswa;
         role = user.role;
         status = AuthStatus.authenticated;
+        unawaited(WidgetService.sync(siswa));
       } else {
         status = AuthStatus.unauthenticated;
       }
@@ -69,6 +73,7 @@ class AppState extends ChangeNotifier {
     role = user.role;
     status = AuthStatus.authenticated;
     notifyListeners();
+    unawaited(WidgetService.sync(siswa));
   }
 
   Future<void> refreshSiswa() async {
@@ -77,6 +82,7 @@ class AppState extends ChangeNotifier {
       if (user != null) {
         siswa = user.siswa;
         notifyListeners();
+        unawaited(WidgetService.sync(siswa));
       }
     } catch (_) {
       // Diamkan — data lama tetap dipakai.
@@ -86,6 +92,7 @@ class AppState extends ChangeNotifier {
   void updateSiswaLocal(Siswa updated) {
     siswa = updated;
     notifyListeners();
+    unawaited(WidgetService.sync(siswa));
   }
 
   Future<void> logout() async {
@@ -94,6 +101,7 @@ class AppState extends ChangeNotifier {
     siswa = null;
     status = AuthStatus.unauthenticated;
     notifyListeners();
+    unawaited(WidgetService.clear());
   }
 
   void _handleUnauthorized() {
