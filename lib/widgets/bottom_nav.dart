@@ -148,39 +148,51 @@ class SjMobileHeader extends StatelessWidget {
           Container(
             width: 36,
             height: 36,
+            padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: AppColors.primary600,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               boxShadow: AppShadows.primary(0.30),
             ),
-            child: const Icon(Symbols.bolt, size: 20, color: Colors.white),
+            child: Image.asset(
+              'asset/logo/Logo_TP.png',
+              fit: BoxFit.contain,
+            ),
           ),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'SINAU JOWO',
-                style: AppFonts.nunito(
-                  size: 16,
-                  weight: FontWeight.w900,
-                  color: AppColors.primary,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'SINAU APP',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppFonts.nunito(
+                    size: 16,
+                    weight: FontWeight.w900,
+                    color: AppColors.primary,
+                  ),
                 ),
-              ),
-              Text(
-                'PLATFORM PASINAON',
-                style: AppFonts.nunito(
-                  size: 9,
-                  weight: FontWeight.w800,
-                  color: AppColors.primary600,
-                  letterSpacing: 1.6,
+                Text(
+                  'PLATFORM PASINAON',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppFonts.nunito(
+                    size: 9,
+                    weight: FontWeight.w800,
+                    color: AppColors.primary600,
+                    letterSpacing: 1.2,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const Spacer(),
-          if (trailing != null) trailing!,
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
         ],
       ),
     );

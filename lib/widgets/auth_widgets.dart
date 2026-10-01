@@ -38,7 +38,7 @@ class _DotPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Logo Sinau Jowo (petir dalam kotak ungu).
+/// Logo SINAU APP.
 class SjLogo extends StatelessWidget {
   const SjLogo({super.key, this.size = 44, this.radius = 16});
 
@@ -50,14 +50,15 @@ class SjLogo extends StatelessWidget {
     return Container(
       width: size,
       height: size,
+      padding: EdgeInsets.all(size * 0.12),
       decoration: BoxDecoration(
         color: AppColors.primary600,
         borderRadius: BorderRadius.circular(radius),
       ),
       alignment: Alignment.center,
-      child: CustomPaint(
-        size: Size(size * 0.5, size * 0.5),
-        painter: _BoltPainter(color: Colors.white),
+      child: Image.asset(
+        'asset/logo/Logo_TP.png',
+        fit: BoxFit.contain,
       ),
     );
   }

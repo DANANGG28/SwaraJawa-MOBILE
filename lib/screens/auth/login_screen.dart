@@ -120,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               'Kata Sandi',
                               trailing: GestureDetector(
                                 onTap: () => _showInfo(
-                                    'Buka halaman lupa sandi melalui website Sinau Jowo.'),
+                                    'Buka halaman lupa sandi melalui website SINAU APP.'),
                                 child: SjLabelUpper(
                                   'Lupa?',
                                   size: 11,
@@ -172,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
-                  '© 2025 Sinau Jowo. Platform Pembelajaran Bahasa Jawa Interaktif.',
+                  '© 2025 SINAU APP. Platform Pembelajaran Bahasa Jawa Interaktif.',
                   style: AppFonts.manrope(size: 11, color: AppColors.gray500),
                 ),
               ),
@@ -193,25 +193,6 @@ class _LoginScreenState extends State<LoginScreen> {
             onPressed: () => _showInfo('Halaman masuk adalah gerbang utama aplikasi.'),
             icon: const Icon(Symbols.close, size: 26, color: AppColors.gray500),
           ),
-          OutlinedButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RegisterScreen()),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.primary600, width: 2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            ),
-            child: Text(
-              'DAFTAR',
-              style: AppFonts.manrope(
-                size: 13,
-                weight: FontWeight.w800,
-                color: AppColors.primary600,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -221,24 +202,22 @@ class _LoginScreenState extends State<LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 56,
-          height: 56,
+          width: 72,
+          height: 72,
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: AppColors.primary600,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
           ),
-          child: const Icon(Symbols.school, size: 30, color: Colors.white),
+          child: Image.asset(
+            'asset/logo/Logo_TP.png',
+            fit: BoxFit.contain,
+          ),
         ),
         const SizedBox(height: 12),
         Text(
           'Masuk',
           style: AppFonts.epilogue(size: 25, weight: FontWeight.w800, color: AppColors.black900),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Masukkan email dan kata sandi akun Sinau Jowo Anda.',
-          textAlign: TextAlign.center,
-          style: AppFonts.manrope(size: 12, color: AppColors.gray500),
         ),
       ],
     );
@@ -318,62 +297,25 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _footer() {
-    return Column(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text.rich(
-          TextSpan(
-            style: AppFonts.manrope(size: 11, color: AppColors.gray500, height: 1.6),
-            children: const [
-              TextSpan(text: 'Dengan masuk ke Sinau Jowo, Anda menyetujui '),
-              TextSpan(
-                text: 'Ketentuan Layanan',
-                style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.black900),
-              ),
-              TextSpan(text: ' dan '),
-              TextSpan(
-                text: 'Kebijakan Privasi',
-                style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.black900),
-              ),
-              TextSpan(text: ' kami.'),
-            ],
-          ),
-          textAlign: TextAlign.center,
+        Text(
+          'Belum punya akun? ',
+          style: AppFonts.manrope(size: 12, color: AppColors.gray500),
         ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.only(top: 12),
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AppColors.gray200)),
+        GestureDetector(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const RegisterScreen()),
           ),
           child: Text(
-            'Guru dan administrator didaftarkan oleh sekolah.',
-            textAlign: TextAlign.center,
-            style: AppFonts.manrope(size: 11, weight: FontWeight.w700, color: AppColors.gray500),
+            'Daftar akun siswa',
+            style: AppFonts.manrope(
+              size: 12,
+              weight: FontWeight.w800,
+              color: AppColors.primary600,
+            ),
           ),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Belum punya akun? ',
-              style: AppFonts.manrope(size: 12, color: AppColors.gray500),
-            ),
-            GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const RegisterScreen()),
-              ),
-              child: Text(
-                'Daftar akun siswa',
-                style: AppFonts.manrope(
-                  size: 12,
-                  weight: FontWeight.w800,
-                  color: AppColors.primary600,
-                ),
-              ),
-            ),
-          ],
         ),
       ],
     );

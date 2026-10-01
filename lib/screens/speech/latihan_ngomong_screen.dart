@@ -200,10 +200,15 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
       backgroundColor: AppColors.gray50,
       body: SafeArea(
         bottom: false,
-        child: Column(
+        child: Stack(
           children: [
-            _header(),
-            Expanded(child: _body()),
+            Column(
+              children: [
+                _header(),
+                Expanded(child: _body()),
+              ],
+            ),
+            if (_result != null) _modalOverlay(_result!),
           ],
         ),
       ),
@@ -219,11 +224,14 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: AppColors.surfaceContainer, shape: BoxShape.circle),
-            child: const Icon(Symbols.close, size: 20, color: AppColors.onSurfaceVariant),
+          GestureDetector(
+            onTap: () => Navigator.of(context).maybePop(),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(color: AppColors.surfaceContainer, shape: BoxShape.circle),
+              child: const Icon(Symbols.close, size: 20, color: AppColors.onSurfaceVariant),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -262,26 +270,62 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxWidth: 400),
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppColors.gray200, width: 2),
+              border: Border.all(color: AppColors.gray200),
+              boxShadow: const [
+                BoxShadow(color: Color(0x0F000000), offset: Offset(0, 4), blurRadius: 12),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Symbols.record_voice_over, size: 48, color: AppColors.gray500),
-                const SizedBox(height: 12),
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Symbols.record_voice_over, size: 36, color: AppColors.primary600),
+                ),
+                const SizedBox(height: 16),
                 Text(
-                  'Belum ana soal latihan ngomong',
+                  'Belum ada soal latihan',
+                  textAlign: TextAlign.center,
                   style: AppFonts.epilogue(size: 20, weight: FontWeight.w800),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Rampungna level sadurunge utawa hubungi guru kanggo nambah soal.',
                   textAlign: TextAlign.center,
-                  style: AppFonts.manrope(size: 14, color: AppColors.gray500),
+                  style: AppFonts.manrope(size: 13, color: AppColors.gray500),
+                ),
+                const SizedBox(height: 20),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary600,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary600.withValues(alpha: 0.25),
+                          offset: const Offset(0, 4),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      'Bali menyang Beranda',
+                      style: AppFonts.manrope(size: 13, weight: FontWeight.w800, color: Colors.white),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -294,17 +338,99 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
       onRefresh: _load,
       color: AppColors.primary600,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
-          _ttsCard(soal),
-          const SizedBox(height: 18),
-          _micSection(),
-          if (_result != null) ...[
-            const SizedBox(height: 20),
-            _guruAiCard(_result!),
-          ],
-          const SizedBox(height: 18),
-          _actions(),
+          // Main Container Card
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppColors.gray200),
+              boxShadow: const [
+                BoxShadow(color: Color(0x0D000000), offset: Offset(0, 4), blurRadius: 12),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Header Badge & Instruction
+                Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F3FF),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Symbols.record_voice_over, size: 16, color: AppColors.primary700),
+                          const SizedBox(width: 6),
+                          Text(
+                            'LATIHAN WICARA BASA JAWA',
+                            style: AppFonts.manrope(
+                              size: 11,
+                              weight: FontWeight.w800,
+                              color: AppColors.primary700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Ucapkan Kalimat di Bawah Ini:',
+                      textAlign: TextAlign.center,
+                      style: AppFonts.epilogue(
+                        size: 18,
+                        weight: FontWeight.w800,
+                        color: AppColors.black900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1, color: AppColors.gray100),
+                const SizedBox(height: 16),
+                // Sentence / TTS Card
+                _ttsCard(soal),
+                const SizedBox(height: 20),
+                // Recording Control Area
+                _micSection(),
+                const SizedBox(height: 16),
+                const Divider(height: 1, color: AppColors.gray100),
+                const SizedBox(height: 12),
+                // Footer action in main card
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.gray200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Kembali ke Beranda',
+                            style: AppFonts.epilogue(size: 12, weight: FontWeight.w700, color: AppColors.black900),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Symbols.arrow_forward, size: 16, color: AppColors.black900),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -312,31 +438,43 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
 
   Widget _ttsCard(Soal soal) {
     return Container(
-      padding: const EdgeInsets.all(22),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.gray100),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0F1E1E2A), offset: Offset(0, 8), blurRadius: 20),
-        ],
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEDE9FE)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            '“${soal.teksReferensi}”',
+            textAlign: TextAlign.center,
+            style: AppFonts.epilogue(
+              size: 22,
+              weight: FontWeight.w800,
+              color: AppColors.primary700,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 16),
           GestureDetector(
             onTap: _playContoh,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.surfaceContainer,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFDDD6FE)),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x0A000000), offset: Offset(0, 2), blurRadius: 4),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Symbols.volume_up, size: 18, color: AppColors.primary700),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Text(
                     'Dengarkan Audio',
                     style: AppFonts.manrope(
@@ -348,11 +486,6 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            '“${soal.teksReferensi}”',
-            style: AppFonts.epilogue(size: 22, weight: FontWeight.w700, height: 1.3),
           ),
         ],
       ),
@@ -366,33 +499,34 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
           alignment: Alignment.center,
           children: [
             if (_recording)
-              Container(
-                width: 112,
-                height: 112,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: 110,
+                height: 110,
                 decoration: BoxDecoration(
-                  color: AppColors.primary400.withValues(alpha: 0.3),
+                  color: AppColors.primary400.withValues(alpha: 0.25),
                   shape: BoxShape.circle,
                 ),
               ),
             GestureDetector(
               onTap: _toggleMic,
               child: Container(
-                width: 80,
-                height: 80,
+                width: 76,
+                height: 76,
                 decoration: BoxDecoration(
                   color: _recording ? AppColors.error : AppColors.primary600,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary700.withValues(alpha: 0.24),
-                      offset: const Offset(0, 14),
-                      blurRadius: 28,
+                      color: (_recording ? AppColors.error : AppColors.primary600).withValues(alpha: 0.35),
+                      offset: const Offset(0, 10),
+                      blurRadius: 20,
                     ),
                   ],
                 ),
                 child: Icon(
                   _recording ? Symbols.stop : Symbols.mic,
-                  size: 36,
+                  size: 34,
                   color: Colors.white,
                 ),
               ),
@@ -409,7 +543,7 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
         ),
         const SizedBox(height: 10),
         _waveform(),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         GestureDetector(
           onTap: () => _kirim('', demo: true),
           child: Text(
@@ -426,22 +560,30 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
   }
 
   Widget _waveform() {
-    final heights = [8.0, 14.0, 22.0, 28.0, 18.0, 12.0, 8.0];
+    final bars = [
+      (8.0, AppColors.primary400),
+      (12.0, AppColors.primary500),
+      (20.0, AppColors.primary600),
+      (26.0, AppColors.primary700),
+      (20.0, AppColors.primary600),
+      (14.0, AppColors.primary500),
+      (8.0, AppColors.primary400),
+    ];
     return SizedBox(
       height: 30,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          for (final h in heights)
+          for (var i = 0; i < bars.length; i++)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 2.5),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
-                width: 4,
-                height: _recording ? h * (_elapsed.inMilliseconds % 2 == 0 ? 1 : 0.6) : h * 0.5,
+                duration: const Duration(milliseconds: 300),
+                width: 5,
+                height: _recording ? bars[i].$1 * ((_elapsed.inMilliseconds + i * 150) % 2 == 0 ? 1.0 : 0.4) : bars[i].$1 * 0.4,
                 decoration: BoxDecoration(
-                  color: AppColors.primary500.withValues(alpha: 0.8),
+                  color: bars[i].$2,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -451,170 +593,300 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
     );
   }
 
-  Widget _guruAiCard(LatihanNgomongResult res) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.gray100),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0F1E1E2A), offset: Offset(0, 8), blurRadius: 20),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [AppColors.primary700, AppColors.primary500]),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Symbols.smart_toy, size: 24, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Text('Guru AI', style: AppFonts.epilogue(size: 17, weight: FontWeight.w800)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () async {
-                    if (_playing) {
-                      await _player.stop();
-                      setState(() => _playing = false);
-                    } else {
-                      final ok = await TtsPlayback.playUrl(_player, res.audioUrl);
-                      if (ok) setState(() => _playing = true);
-                    }
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary600,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _playing ? Symbols.pause : Symbols.play_arrow,
-                      size: 20,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Dengarkan Koreksi Guru AI',
-                    style: AppFonts.manrope(size: 12, color: AppColors.gray500),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'HASIL SUARAMU',
-                  style: AppFonts.manrope(
-                    size: 11,
-                    weight: FontWeight.w800,
-                    color: AppColors.gray500,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  res.transkripsi.isEmpty ? 'Durung ana rekaman.' : '“${res.transkripsi}”',
-                  style: AppFonts.manrope(size: 15, weight: FontWeight.w700),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            res.feedbackText ?? '',
-            style: AppFonts.manrope(size: 15, height: 1.5),
-          ),
-          if (res.mock) ...[
-            const SizedBox(height: 6),
-            Text(
-              '(Mode mock — layanan AI belum dikonfigurasi)',
-              style: AppFonts.manrope(size: 12, color: AppColors.gray500),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _actions() {
-    return Row(
-      children: [
-        GestureDetector(
+  Widget _modalOverlay(LatihanNgomongResult res) {
+    return Positioned.fill(
+      child: Material(
+        color: const Color(0x990F172A), // Slate-900 / 60% backdrop
+        child: InkWell(
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
           onTap: _reset,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainer,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                const Icon(Symbols.replay, size: 18),
-                const SizedBox(width: 8),
-                Text('Coba Ulangi', style: AppFonts.epilogue(size: 15, weight: FontWeight.w700)),
-              ],
-            ),
-          ),
-        ),
-        const Spacer(),
-        GestureDetector(
-          onTap: () => Navigator.of(context).maybePop(),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-            decoration: BoxDecoration(
-              color: AppColors.primary600,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary700.withValues(alpha: 0.22),
-                  offset: const Offset(0, 8),
-                  blurRadius: 20,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: InkWell(
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                onTap: () {}, // Prevent tap through dismiss
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: AppColors.gray100),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x33000000), offset: Offset(0, 12), blurRadius: 32),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Modal Header
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary600,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: const [
+                                BoxShadow(color: Color(0x1A000000), offset: Offset(0, 2), blurRadius: 4),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(Symbols.smart_toy, size: 22, color: Colors.white),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Umpan Balik Guru AI',
+                                  style: AppFonts.epilogue(size: 16, weight: FontWeight.w800, color: AppColors.black900),
+                                ),
+                                Text(
+                                  'Hasil Evaluasi Pengucapan',
+                                  style: AppFonts.manrope(size: 11, weight: FontWeight.w600, color: AppColors.primary600),
+                                ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: _reset,
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: const BoxDecoration(
+                                color: AppColors.surfaceContainerLow,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Symbols.close, size: 18, color: AppColors.gray500),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Hasil Suaramu
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.gray100),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Symbols.hearing, size: 16, color: AppColors.gray500),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'HASIL SUARAMU',
+                                  style: AppFonts.manrope(
+                                    size: 11,
+                                    weight: FontWeight.w800,
+                                    color: AppColors.gray500,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              res.transkripsi.isEmpty ? 'Durung ana rekaman.' : '“${res.transkripsi}”',
+                              style: AppFonts.manrope(size: 15, weight: FontWeight.w700, color: AppColors.black900),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      // Audio Koreksi Guru AI
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.gray100),
+                        ),
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () async {
+                                if (_playing) {
+                                  await _player.stop();
+                                  setState(() => _playing = false);
+                                } else {
+                                  final ok = await TtsPlayback.playUrl(_player, res.audioUrl);
+                                  if (ok) {
+                                    setState(() => _playing = true);
+                                    _player.onPlayerComplete.listen((_) {
+                                      if (mounted) setState(() => _playing = false);
+                                    });
+                                  }
+                                }
+                              },
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary600,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary600.withValues(alpha: 0.3),
+                                      offset: const Offset(0, 2),
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  _playing ? Symbols.pause : Symbols.play_arrow,
+                                  size: 22,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: LinearProgressIndicator(
+                                      value: _playing ? null : 0.0,
+                                      backgroundColor: AppColors.gray200,
+                                      color: AppColors.primary600,
+                                      minHeight: 6,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Dengarkan Koreksi Guru AI',
+                                    style: AppFonts.manrope(size: 11, weight: FontWeight.w600, color: AppColors.gray500),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      // Feedback Text
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.gray100),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x0A000000), offset: Offset(0, 2), blurRadius: 4),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'CATATAN EVALUASI:',
+                              style: AppFonts.manrope(
+                                size: 10,
+                                weight: FontWeight.w800,
+                                color: AppColors.gray500,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              res.feedbackText ?? '',
+                              style: AppFonts.manrope(size: 13, height: 1.5, color: AppColors.black900),
+                            ),
+                            if (res.mock) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                '(Mode mock — layanan AI belum dikonfigurasi)',
+                                style: AppFonts.manrope(size: 11, color: AppColors.gray500),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      // Actions: Coba Ulangi & Rampung
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _reset,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceContainerLow,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.gray200),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Symbols.replay, size: 18, color: AppColors.gray500),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Coba Ulangi',
+                                      style: AppFonts.epilogue(size: 13, weight: FontWeight.w700, color: AppColors.black900),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => Navigator.of(context).maybePop(),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary600,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary600.withValues(alpha: 0.25),
+                                      offset: const Offset(0, 4),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'Rampung',
+                                      style: AppFonts.epilogue(size: 13, weight: FontWeight.w700, color: Colors.white),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    const Icon(Symbols.arrow_forward, size: 18, color: Colors.white),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Text('Rampung', style: AppFonts.epilogue(size: 15, weight: FontWeight.w700, color: Colors.white)),
-                const SizedBox(width: 8),
-                const Icon(Symbols.arrow_forward, size: 18, color: Colors.white),
-              ],
+              ),
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }

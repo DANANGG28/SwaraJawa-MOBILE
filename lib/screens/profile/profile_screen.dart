@@ -10,6 +10,7 @@ import '../../models/leaderboard_entry.dart';
 import '../../models/progres.dart';
 import '../../core/network/api_exception.dart';
 import '../../state/app_state.dart';
+import '../../widgets/bottom_nav.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -77,7 +78,27 @@ class ProfileScreenState extends State<ProfileScreen> {
         bottom: false,
         child: Column(
           children: [
-            _header(),
+            SjMobileHeader(
+              trailing: Row(
+                children: [
+                  _pill(
+                    icon: Symbols.local_fire_department,
+                    color: const Color(0xFFEA580C),
+                    bg: const Color(0xFFFFF7ED),
+                    border: const Color(0xFFFED7AA),
+                    value: '${siswa?.currentStreak ?? 0}',
+                  ),
+                  const SizedBox(width: 8),
+                  _pill(
+                    icon: Symbols.bolt,
+                    color: AppColors.brand600,
+                    bg: const Color(0xFFF5F3FF),
+                    border: const Color(0xFFDDD6FE),
+                    value: '${siswa?.totalExp ?? 0}',
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.primary600,
@@ -88,8 +109,6 @@ class ProfileScreenState extends State<ProfileScreen> {
                         padding: const EdgeInsets.fromLTRB(14, 16, 14, 32),
                         children: [
                           _profileCard(siswa),
-                          const SizedBox(height: 16),
-                          _logoutButton(),
                         ],
                       ),
               ),
@@ -100,68 +119,28 @@ class ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _header() {
+  Widget _pill({
+    required IconData icon,
+    required Color color,
+    required Color bg,
+    required Color border,
+    required String value,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xE6FFFFFF),
-        boxShadow: [
-          BoxShadow(color: Color(0x0A000000), offset: Offset(0, 1), blurRadius: 8),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border, width: 1.5),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.gray50,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppColors.gray200.withValues(alpha: 0.6)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Symbols.search, size: 20, color: AppColors.gray500),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Cari materi aksara, peribahasa, tata bahasa...',
-                      style: AppFonts.manrope(size: 12, color: AppColors.gray500),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Stack(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(color: AppColors.gray50, shape: BoxShape.circle),
-                child: const Icon(Symbols.notifications, size: 20, color: AppColors.onSurfaceVariant),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(color: AppColors.secondary, shape: BoxShape.circle),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () => _confirmLogout(),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(color: AppColors.gray50, shape: BoxShape.circle),
-              child: const Icon(Symbols.logout, size: 20, color: Color(0xFFDC2626)),
-            ),
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: AppFonts.nunito(size: 12, weight: FontWeight.w900, color: color),
           ),
         ],
       ),
@@ -208,22 +187,6 @@ class ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Symbols.school, size: 16, color: Color(0xE6FFFFFF)),
-              const SizedBox(width: 6),
-              Text(
-                'PORTAL BELAJAR SISWA • SINAU JOWO',
-                style: AppFonts.manrope(
-                  size: 10,
-                  weight: FontWeight.w700,
-                  color: Colors.white.withValues(alpha: 0.9),
-                  letterSpacing: 1,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -291,19 +254,11 @@ class ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'NIS: ${siswa.nis ?? '-'}  •  KELAS ${(siswa.kelas ?? 'SISWA').toString().toUpperCase()}  •  SINAU JOWO',
+                      'NIS: ${siswa.nis ?? '-'}  •  KELAS ${(siswa.kelas ?? 'SISWA').toString().toUpperCase()}  •  SINAU APP',
                       style: AppFonts.manrope(
                         size: 11,
                         weight: FontWeight.w600,
                         color: Colors.white.withValues(alpha: 0.9),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Siswa rajin mempelajari tata krama bahasa dan aksara Jawa.',
-                      style: AppFonts.manrope(
-                        size: 12,
-                        color: Colors.white.withValues(alpha: 0.85),
                       ),
                     ),
                   ],
@@ -344,6 +299,40 @@ class ProfileScreenState extends State<ProfileScreen> {
                       size: 13,
                       weight: FontWeight.w800,
                       color: AppColors.primary700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => _confirmLogout(),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDC2626),
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x33DC2626), offset: Offset(0, 4), blurRadius: 8),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Symbols.logout,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Keluar Akun',
+                    style: AppFonts.manrope(
+                      size: 13,
+                      weight: FontWeight.w800,
+                      color: Colors.white,
                     ),
                   ),
                 ],
@@ -480,17 +469,20 @@ class ProfileScreenState extends State<ProfileScreen> {
 
   Widget _tabsBar() {
     return Container(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.gray200)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _tabButton('badge', 'Koleksi Badge & Piagam', Symbols.workspace_premium),
-          const SizedBox(width: 16),
-          _tabButton('akademik', 'Rincian Profil & Akademik', Symbols.school),
+          Expanded(
+            child: _tabButton('badge', 'Koleksi Piagam', Symbols.workspace_premium),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _tabButton('akademik', 'Rincian Profil', Symbols.school),
+          ),
         ],
       ),
     );
@@ -501,7 +493,7 @@ class ProfileScreenState extends State<ProfileScreen> {
     return GestureDetector(
       onTap: () => setState(() => _tab = key),
       child: Container(
-        padding: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -511,15 +503,20 @@ class ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 16, color: active ? AppColors.primary600 : AppColors.gray500),
             const SizedBox(width: 6),
-            Text(
-              label,
-              style: AppFonts.epilogue(
-                size: 12,
-                weight: active ? FontWeight.w800 : FontWeight.w500,
-                color: active ? AppColors.primary600 : AppColors.gray500,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppFonts.epilogue(
+                  size: 12,
+                  weight: active ? FontWeight.w800 : FontWeight.w600,
+                  color: active ? AppColors.primary600 : AppColors.gray500,
+                ),
               ),
             ),
           ],
@@ -549,11 +546,6 @@ class ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Koleksi Piagam & Lencana Belajar', style: AppFonts.epilogue(size: 14, weight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text(
-                'Lencana otomatis diraih ketika menyelesaikan penelusuran aksara, percakapan krama, dan kuis kebudayaan.',
-                style: AppFonts.manrope(size: 12, color: AppColors.gray500),
-              ),
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -838,39 +830,11 @@ class ProfileScreenState extends State<ProfileScreen> {
             style: AppFonts.manrope(size: 10, weight: FontWeight.w800, color: AppColors.primary600, letterSpacing: 0.8),
           ),
           rows: const [
-            ('Asal Sekolah', 'Sinau Jowo Academy'),
+            ('Asal Sekolah', 'SINAU APP Academy'),
             ('Kurikulum & Muatan', 'Bahasa, Sastra & Aksara Jawa'),
             ('Tahun Ajaran', '2024 / 2025'),
             ('Semester Aktif', 'Semester Ganjil'),
           ],
-        ),
-        const SizedBox(height: 20),
-        GestureDetector(
-          onTap: () => _confirmLogout(),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.gray200, width: 2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Symbols.logout, size: 20, color: Color(0xFFDC2626)),
-                const SizedBox(width: 8),
-                Text(
-                  'KELUAR',
-                  style: AppFonts.epilogue(
-                    size: 13,
-                    weight: FontWeight.w800,
-                    color: const Color(0xFFDC2626),
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ],
     );
@@ -934,36 +898,6 @@ class ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _logoutButton() {
-    return GestureDetector(
-      onTap: () => _confirmLogout(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.gray200, width: 2),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Symbols.logout, size: 20, color: Color(0xFFDC2626)),
-            const SizedBox(width: 8),
-            Text(
-              'KELUAR DARI AKUN',
-              style: AppFonts.epilogue(
-                size: 13,
-                weight: FontWeight.w800,
-                color: const Color(0xFFDC2626),
-                letterSpacing: 0.8,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _confirmLogout() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -971,8 +905,15 @@ class ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Keluar dari akun?'),
         content: const Text('Anda akan kembali ke halaman masuk.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Keluar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFDC2626)),
+            child: const Text('Keluar'),
+          ),
         ],
       ),
     );

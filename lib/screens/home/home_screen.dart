@@ -376,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
@@ -385,8 +385,8 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 5),
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 4),
           Text(
             value,
             style: AppFonts.nunito(size: 12, weight: FontWeight.w900, color: color),

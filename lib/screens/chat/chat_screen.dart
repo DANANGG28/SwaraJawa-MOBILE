@@ -41,25 +41,6 @@ class _ChatScreenState extends State<ChatScreen> {
   int _silenceMs = 0;
   DateTime? _micStart;
 
-  static const _suggestions = <({String label, String prompt})>[
-    (
-      label: 'Ubah ke Krama Alus: “Saya mau makan bersama kakek”',
-      prompt: "Ubahlah ke Krama Alus: 'Saya mau makan bersama kakek'",
-    ),
-    (
-      label: 'Bedane tembung ‘turu’, ‘tilem’, lan ‘sare’?',
-      prompt: "Apa bedane tembung 'turu', 'tilem', lan 'sare'?",
-    ),
-    (
-      label: 'Tegese bebasan ‘Becik ketitik ala ketara’',
-      prompt: "Apa tegese bebasan 'Becik ketitik ala ketara'?",
-    ),
-    (
-      label: 'Panganggone sandhangan wulu lan suku',
-      prompt: 'Piye panganggone sandhangan wulu lan suku ing aksara Jawa?',
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -365,7 +346,6 @@ class _ChatScreenState extends State<ChatScreen> {
             _header(),
             Expanded(child: _messagesList()),
             _inputArea(),
-            _footer(),
           ],
         ),
       ),
@@ -444,50 +424,16 @@ class _ChatScreenState extends State<ChatScreen> {
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
       children: [
-        Column(
-          children: [
-            Text(
-              'Tanya apa saja seputar Basa Jawa',
-              textAlign: TextAlign.center,
-              style: AppFonts.epilogue(size: 20, weight: FontWeight.w800),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Tingkatan unggah-ungguh, aksara Jawa, peribahasa, atau terjemahan krama alus langsung terverifikasi.',
-              textAlign: TextAlign.center,
-              style: AppFonts.manrope(size: 12, color: AppColors.onSurfaceVariant),
-            ),
-          ],
+        Center(
+          child: Text(
+            'Tanya apa saja seputar Basa Jawa',
+            textAlign: TextAlign.center,
+            style: AppFonts.epilogue(size: 20, weight: FontWeight.w800),
+          ),
         ),
         const SizedBox(height: 20),
         for (final m in _messages) _message(m),
         if (_typing) _typingBubble(),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final s in _suggestions)
-              GestureDetector(
-                onTap: () => _ask(s.prompt),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    s.label,
-                    style: AppFonts.manrope(
-                      size: 12,
-                      weight: FontWeight.w600,
-                      color: AppColors.primary700,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
       ],
     );
   }
@@ -640,7 +586,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _inputArea() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       child: Column(
         children: [
           Container(
@@ -703,45 +649,17 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-            child: Text(
-              _recording
-                  ? 'Merekam… tap ikon berhenti untuk menghentikan'
-                  : _transcribing
-                      ? 'Mengubah suara menjadi teks…'
-                      : 'Asisten Tanya Bahasa menjawab berdasarkan basis data korpus resmi sekolah.',
-              textAlign: TextAlign.center,
-              style: AppFonts.manrope(size: 10, color: AppColors.gray500),
+          if (_recording || _transcribing)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _recording
+                    ? 'Merekam… tap ikon berhenti untuk menghentikan'
+                    : 'Mengubah suara menjadi teks…',
+                textAlign: TextAlign.center,
+                style: AppFonts.manrope(size: 10, color: AppColors.gray500),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _footer() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      color: AppColors.surfaceContainerLow,
-      child: Column(
-        children: [
-          Text(
-            '© 2026 Sinau Jowo. Kagunganipun sesarengan kangge nguri-uri kabudayan.',
-            textAlign: TextAlign.center,
-            style: AppFonts.manrope(size: 11, color: AppColors.onSurfaceVariant),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'NGOKO • MADYA • KRAMA INGGIL',
-            style: AppFonts.manrope(
-              size: 11,
-              weight: FontWeight.w800,
-              color: AppColors.primary700,
-              letterSpacing: 1,
-            ),
-          ),
         ],
       ),
     );

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_fonts.dart';
-import '../widgets/auth_widgets.dart';
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
@@ -11,6 +10,8 @@ class SplashScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -22,27 +23,51 @@ class SplashScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const SjLogo(size: 76, radius: 24),
-              const SizedBox(height: 20),
+              Container(
+                width: 90,
+                height: 90,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.primary600,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    width: 2,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      offset: Offset(0, 10),
+                      blurRadius: 24,
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  'asset/logo/Logo_TP.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(height: 22),
               Text(
-                'Sinau Jowo',
+                'SINAU APP',
                 style: AppFonts.epilogue(
-                  size: 28,
-                  weight: FontWeight.w800,
+                  size: 30,
+                  weight: FontWeight.w900,
                   color: Colors.white,
+                  letterSpacing: 0.5,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 'PLATFORM PASINAON',
-                style: AppFonts.manrope(
-                  size: 11,
+                style: AppFonts.nunito(
+                  size: 12,
                   weight: FontWeight.w800,
-                  color: Colors.white.withValues(alpha: 0.8),
-                  letterSpacing: 2.4,
+                  color: Colors.white.withValues(alpha: 0.85),
+                  letterSpacing: 2.5,
                 ),
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 40),
               SizedBox(
                 width: 28,
                 height: 28,

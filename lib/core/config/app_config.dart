@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 
-/// Konfigurasi global aplikasi Sinau Jowo.
+/// Konfigurasi global aplikasi SINAU APP.
 ///
 /// Base URL dapat di-override saat build:
 ///   flutter build apk --dart-define=SJ_BASE_URL=http://192.168.1.10:8000/api
 class AppConfig {
-  static const String appName = 'Sinau Jowo';
+  static const String appName = 'SINAU APP';
   static const String appTagline = 'Platform Pasinaon';
 
   static const String _override = String.fromEnvironment('SJ_BASE_URL');
