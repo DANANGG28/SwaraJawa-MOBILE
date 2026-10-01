@@ -7,15 +7,15 @@ import 'screens/main/main_shell.dart';
 import 'screens/splash_screen.dart';
 import 'state/app_state.dart';
 
-class SinauJowoApp extends StatelessWidget {
-  const SinauJowoApp({super.key});
+class SinauApp extends StatelessWidget {
+  const SinauApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<AppState>(
       create: (_) => AppState()..bootstrap(),
       child: MaterialApp(
-        title: 'Sinau Jowo',
+        title: 'SINAU APP',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         home: const _Root(),

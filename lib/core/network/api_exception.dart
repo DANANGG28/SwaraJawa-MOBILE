@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 
-/// Galat terstruktur dari REST API Sinau Jowo.
+/// Galat terstruktur dari REST API SINAU APP.
 class ApiException implements Exception {
   ApiException(
     this.message, {

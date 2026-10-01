@@ -276,7 +276,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     Text(
                       lengkap
                           ? 'Semua data profil Anda sudah terisi lengkap. Anda tetap dapat memperbarui informasi kapan saja.'
-                          : 'Lengkapi foto profil dan data diri Anda untuk memaksimalkan pengalaman belajar di Sinau Jowo.',
+                          : 'Lengkapi foto profil dan data diri Anda untuk memaksimalkan pengalaman belajar di SINAU APP.',
                       style: AppFonts.manrope(size: 12, color: AppColors.onSurfaceVariant, height: 1.5),
                     ),
                   ],

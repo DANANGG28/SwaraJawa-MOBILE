@@ -113,6 +113,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            Center(
+                              child: Container(
+                                width: 72,
+                                height: 72,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary600,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Image.asset(
+                                  'asset/logo/Logo_TP.png',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             Text(
                               'Daftar Akun Siswa',
                               textAlign: TextAlign.center,
@@ -121,12 +137,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 weight: FontWeight.w800,
                                 color: AppColors.black900,
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Mulai petualangan belajar bahasa & budaya Jawa secara interaktif dan menyenangkan.',
-                              textAlign: TextAlign.center,
-                              style: AppFonts.manrope(size: 13, color: AppColors.onSurfaceVariant),
                             ),
                             const SizedBox(height: 22),
                             if (_error != null) ...[
@@ -262,27 +272,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             const SizedBox(height: 16),
                             _googleButton(),
-                            const SizedBox(height: 18),
-                            Text.rich(
-                              TextSpan(
-                                style: AppFonts.manrope(size: 11, color: AppColors.gray500, height: 1.6),
-                                children: const [
-                                  TextSpan(text: 'Dengan mendaftar di Sinau Jowo, Anda menyetujui '),
-                                  TextSpan(
-                                    text: 'Ketentuan Layanan',
-                                    style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary700),
-                                  ),
-                                  TextSpan(text: ' dan '),
-                                  TextSpan(
-                                    text: 'Kebijakan Privasi',
-                                    style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary700),
-                                  ),
-                                  TextSpan(text: ' kami.'),
-                                ],
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 22),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -313,7 +303,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
-                  '© 2025 Sinau Jowo. Hak Cipta Dilindungi.',
+                  '© 2025 SINAU APP. Hak Cipta Dilindungi.',
                   style: AppFonts.manrope(size: 11, color: AppColors.gray500),
                 ),
               ),
@@ -333,23 +323,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Symbols.close, size: 26, color: AppColors.gray500),
-          ),
-          OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.primary600, width: 2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            ),
-            child: Text(
-              'MASUK',
-              style: AppFonts.manrope(
-                size: 13,
-                weight: FontWeight.w800,
-                color: AppColors.primary600,
-                letterSpacing: 0.8,
-              ),
-            ),
           ),
         ],
       ),
@@ -449,10 +422,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: Opacity(
         opacity: (_googleLoading || _loading) ? 0.6 : 1,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 15),
           decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(14),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.gray200),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -464,11 +438,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else
-                Icon(Symbols.g_translate, size: 20, color: AppColors.onSurface),
-              const SizedBox(width: 10),
+                const _GoogleIcon(),
+              const SizedBox(width: 12),
               Text(
-                _googleLoading ? 'Menghubungkan...' : 'Daftar dengan Google',
-                style: AppFonts.manrope(size: 13, weight: FontWeight.w700),
+                _googleLoading ? 'MENGHUBUNGKAN...' : 'DAFTAR DENGAN GOOGLE',
+                style: AppFonts.manrope(
+                  size: 13,
+                  weight: FontWeight.w800,
+                  color: AppColors.black900,
+                  letterSpacing: 0.4,
+                ),
               ),
             ],
           ),
@@ -491,4 +470,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
+}
+
+class _GoogleIcon extends StatelessWidget {
+  const _GoogleIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: CustomPaint(painter: _GooglePainter()),
+    );
+  }
+}
+
+class _GooglePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2;
+    final c = Offset(r, r);
+    final stroke = size.width * 0.24;
+    final rect = Rect.fromCircle(center: c, radius: r - stroke / 2);
+
+    void arc(Color color, double start, double sweep) {
+      canvas.drawArc(
+        rect,
+        start,
+        sweep,
+        false,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.butt,
+      );
+    }
+
+    arc(const Color(0xFF4285F4), -0.35, 1.35);
+    arc(const Color(0xFF34A853), 1.0, 1.15);
+    arc(const Color(0xFFFBBC05), 2.15, 1.1);
+    arc(const Color(0xFFEA4335), 3.25, 1.35);
+
+    final barPaint = Paint()..color = const Color(0xFF4285F4);
+    canvas.drawRect(
+      Rect.fromLTRB(r * 1.05, r * 0.72, size.width - 1, r * 1.28),
+      barPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

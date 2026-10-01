@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
 import '../../models/leaderboard_entry.dart';
 import '../../state/app_state.dart';
+import '../../widgets/bottom_nav.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -60,8 +61,9 @@ class LeaderboardScreenState extends State<LeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final kelas = state.siswa?.kelas;
-    final myId = state.siswa?.id;
+    final siswa = state.siswa;
+    final kelas = siswa?.kelas;
+    final myId = siswa?.id;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -69,7 +71,27 @@ class LeaderboardScreenState extends State<LeaderboardScreen> {
         bottom: false,
         child: Column(
           children: [
-            _header(),
+            SjMobileHeader(
+              trailing: Row(
+                children: [
+                  _pill(
+                    icon: Symbols.local_fire_department,
+                    color: const Color(0xFFEA580C),
+                    bg: const Color(0xFFFFF7ED),
+                    border: const Color(0xFFFED7AA),
+                    value: '${siswa?.currentStreak ?? 0}',
+                  ),
+                  const SizedBox(width: 8),
+                  _pill(
+                    icon: Symbols.bolt,
+                    color: AppColors.brand600,
+                    bg: const Color(0xFFF5F3FF),
+                    border: const Color(0xFFDDD6FE),
+                    value: '${siswa?.totalExp ?? 0}',
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.primary600,
@@ -83,64 +105,28 @@ class LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _header() {
+  Widget _pill({
+    required IconData icon,
+    required Color color,
+    required Color bg,
+    required Color border,
+    required String value,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xE6FFFFFF),
-        boxShadow: [
-          BoxShadow(color: Color(0x0A000000), offset: Offset(0, 1), blurRadius: 8),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border, width: 1.5),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.gray50,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppColors.gray200.withValues(alpha: 0.6)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Symbols.search, size: 18, color: AppColors.gray500),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Cari materi, aksara, siswa...',
-                      style: AppFonts.manrope(size: 12, color: AppColors.gray500),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Stack(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.gray50,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Symbols.notifications, size: 20, color: AppColors.onSurfaceVariant),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.secondary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: AppFonts.nunito(size: 12, weight: FontWeight.w900, color: color),
           ),
         ],
       ),
@@ -208,22 +194,14 @@ class LeaderboardScreenState extends State<LeaderboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Symbols.star, size: 14, color: AppColors.yellow300),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'PAPAN SKOR • ${_scope == 'sekolah' ? 'PERINGKAT SEKOLAH' : (kelas != null && kelas.isNotEmpty ? 'KELAS $kelas' : 'SEMUA KELAS')}',
-                  style: AppFonts.manrope(
-                    size: 10,
-                    weight: FontWeight.w800,
-                    color: AppColors.yellow300,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'PAPAN SKOR | ${_scope == 'sekolah' ? 'PERINGKAT SEKOLAH' : (kelas != null && kelas.isNotEmpty ? 'KELAS $kelas' : 'SEMUA KELAS')}',
+            style: AppFonts.manrope(
+              size: 10,
+              weight: FontWeight.w800,
+              color: AppColors.yellow300,
+              letterSpacing: 1,
+            ),
           ),
           const SizedBox(height: 10),
           Text(
@@ -394,16 +372,6 @@ class LeaderboardScreenState extends State<LeaderboardScreen> {
         children: [
           Row(
             children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: AppColors.primary500.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(Symbols.auto_awesome, size: 17, color: AppColors.primary600),
-              ),
-              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Tiga Besar (Top 3)',

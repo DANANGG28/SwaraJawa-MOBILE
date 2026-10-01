@@ -12,5 +12,5 @@ void main() {
       statusBarBrightness: Brightness.light,
     ),
   );
-  runApp(const SinauJowoApp());
+  runApp(const SinauApp());
 }
