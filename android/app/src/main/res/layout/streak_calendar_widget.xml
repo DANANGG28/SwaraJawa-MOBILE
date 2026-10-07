@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg_calendar"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Header: sapaan + bulan / pill streak -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/widget_greeting"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/nunito_bold"
+                    android:text="Sugeng enjing"
+                    android:textColor="#D7D0FF"
+                    android:textSize="10sp"
+                    android:includeFontPadding="false" />
+
+                <TextView
+                    android:id="@+id/widget_month"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/nunito_extrabold"
+                    android:letterSpacing="0.06"
+                    android:text="SEPTEMBER 2026"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:includeFontPadding="false" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/pill_streak_bg"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp">
+
+                <ImageView
+                    android:id="@+id/widget_flame"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:contentDescription="streak"
+                    android:src="@drawable/ic_flame" />
+
+                <TextView
+                    android:id="@+id/widget_streak_num"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:fontFamily="@font/nunito_extrabold"
+                    android:text="0"
+                    android:textColor="#FFFFFF"
+                    android:textSize="15sp"
+                    android:includeFontPadding="false" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:fontFamily="@font/nunito_bold"
+                    android:text="dina"
+                    android:textColor="#FFE3CF"
+                    android:textSize="10sp"
+                    android:includeFontPadding="false" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Body: kalender + maskot -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView android:id="@+id/cal_head_0" style="@style/WidgetCalHead" android:text="S" />
+                    <TextView android:id="@+id/cal_head_1" style="@style/WidgetCalHead" android:text="S" />
+                    <TextView android:id="@+id/cal_head_2" style="@style/WidgetCalHead" android:text="R" />
+                    <TextView android:id="@+id/cal_head_3" style="@style/WidgetCalHead" android:text="K" />
+                    <TextView android:id="@+id/cal_head_4" style="@style/WidgetCalHead" android:text="J" />
+                    <TextView android:id="@+id/cal_head_5" style="@style/WidgetCalHead" android:text="S" />
+                    <TextView android:id="@+id/cal_head_6" style="@style/WidgetCalHead" android:text="M" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/cal_row_0" style="@style/WidgetCalRow">
+                    <TextView android:id="@+id/cal_cell_0" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_1" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_2" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_3" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_4" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_5" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_6" style="@style/WidgetCalCell" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/cal_row_1" style="@style/WidgetCalRow">
+                    <TextView android:id="@+id/cal_cell_7" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_8" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_9" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_10" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_11" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_12" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_13" style="@style/WidgetCalCell" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/cal_row_2" style="@style/WidgetCalRow">
+                    <TextView android:id="@+id/cal_cell_14" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_15" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_16" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_17" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_18" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_19" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_20" style="@style/WidgetCalCell" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/cal_row_3" style="@style/WidgetCalRow">
+                    <TextView android:id="@+id/cal_cell_21" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_22" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_23" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_24" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_25" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_26" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_27" style="@style/WidgetCalCell" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/cal_row_4" style="@style/WidgetCalRow">
+                    <TextView android:id="@+id/cal_cell_28" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_29" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_30" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_31" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_32" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_33" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_34" style="@style/WidgetCalCell" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/cal_row_5" style="@style/WidgetCalRow">
+                    <TextView android:id="@+id/cal_cell_35" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_36" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_37" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_38" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_39" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_40" style="@style/WidgetCalCell" />
+                    <TextView android:id="@+id/cal_cell_41" style="@style/WidgetCalCell" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <FrameLayout
+                android:layout_width="86dp"
+                android:layout_height="match_parent">
+
+                <ImageView
+                    android:id="@+id/widget_mascot"
+                    android:layout_width="86dp"
+                    android:layout_height="86dp"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:contentDescription="maskot Sinau Jowo"
+                    android:src="@drawable/mascot_happy" />
+            </FrameLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

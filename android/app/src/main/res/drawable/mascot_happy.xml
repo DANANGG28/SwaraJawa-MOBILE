@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <!-- Telinga / jambul -->
+    <path
+        android:fillColor="#4AA23A"
+        android:pathData="M28,40C22,18 24,6 34,6C43,6 48,20 50,36Z" />
+    <path
+        android:fillColor="#4AA23A"
+        android:pathData="M100,40C106,18 104,6 94,6C85,6 80,20 78,36Z" />
+    <!-- Kepala -->
+    <path
+        android:fillColor="#63BE4B"
+        android:pathData="M18,70a46,46 0 1,0 92,0a46,46 0 1,0 -92,0z" />
+    <!-- Cakram wajah -->
+    <path
+        android:fillColor="#F5F7E4"
+        android:pathData="M28,74a36,35 0 1,0 72,0a36,35 0 1,0 -72,0z" />
+    <!-- Pipi merona -->
+    <path
+        android:fillColor="#F5A0BF"
+        android:pathData="M25.5,87a6.5,4.2 0 1,0 13,0a6.5,4.2 0 1,0 -13,0z" />
+    <path
+        android:fillColor="#F5A0BF"
+        android:pathData="M89.5,87a6.5,4.2 0 1,0 13,0a6.5,4.2 0 1,0 -13,0z" />
+    <!-- Mata -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,72a15,17 0 1,0 30,0a15,17 0 1,0 -30,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M65,72a15,17 0 1,0 30,0a15,17 0 1,0 -30,0z" />
+    <path
+        android:fillColor="#2E241C"
+        android:pathData="M40.5,74a7.5,7.5 0 1,0 15,0a7.5,7.5 0 1,0 -15,0z" />
+    <path
+        android:fillColor="#2E241C"
+        android:pathData="M72.5,74a7.5,7.5 0 1,0 15,0a7.5,7.5 0 1,0 -15,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M47.7,70a2.8,2.8 0 1,0 5.6,0a2.8,2.8 0 1,0 -5.6,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M79.7,70a2.8,2.8 0 1,0 5.6,0a2.8,2.8 0 1,0 -5.6,0z" />
+    <!-- Paruh -->
+    <path
+        android:fillColor="#F5A623"
+        android:pathData="M55,84Q64,79 73,84L64,97Z" />
+</vector>
