@@ -87,6 +87,11 @@ keyPassword=...
 `storeFile` relatif terhadap `android/app/`. Bila `key.properties` ada, build
 lokal juga otomatis memakai kunci rilis itu.
 
+Kunci rilis SINAU APP (dibuat 2026-10-09, alias `sjmobile`) punya sidik jari
+SHA-256 `47:D4:31:CE:53:E4:92:8D:80:56:F6:46:3A:D8:37:3B:20:97:C6:1E:6B:0E:5B:13:42:34:DC:AC:AA:A3:D1:6A`.
+CD menolak APK yang sidik jarinya tidak cocok, jadi fallback ke debug key tidak
+akan lolos diam-diam.
+
 ## Backend
 
 Kontrak API: `API_DOCUMENTATION.md`. Rencana OAuth Google: `LARAVEL_GOOGLE_OAUTH_TASK.md`.
