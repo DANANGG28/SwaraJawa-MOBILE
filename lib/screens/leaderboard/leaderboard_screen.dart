@@ -600,7 +600,7 @@ class LeaderboardScreenState extends State<LeaderboardScreen> {
               width: 24,
               height: 24,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.gray100,
                 shape: BoxShape.circle,
               ),
@@ -666,7 +666,7 @@ class LeaderboardScreenState extends State<LeaderboardScreen> {
           Container(
             width: 28,
             height: 28,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.primary600,
               shape: BoxShape.circle,
             ),

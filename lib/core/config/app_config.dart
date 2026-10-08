@@ -8,6 +8,9 @@ class AppConfig {
   static const String appName = 'SINAU APP';
   static const String appTagline = 'Platform Pasinaon';
 
+  /// Backend produksi. Dipakai otomatis oleh build `--release`.
+  static const String prodBaseUrl = 'https://sinau-app.my.id/api';
+
   static const String _override = String.fromEnvironment('SJ_BASE_URL');
 
   /// Google OAuth "Web application" client ID, dipakai sebagai `serverClientId`
@@ -24,10 +27,12 @@ class AppConfig {
   /// Base URL backend.
   ///
   /// - Jika di-override lewat `--dart-define=SJ_BASE_URL=...`, nilai itu dipakai.
-  /// - Web (browser) & desktop memakai `localhost`.
-  /// - Emulator Android memakai `10.0.2.2` (alias localhost host).
+  /// - Build release selalu menembak [prodBaseUrl], apa pun platformnya.
+  /// - Selain itu: emulator Android memakai `10.0.2.2` (alias localhost host),
+  ///   web (browser) & desktop memakai `localhost`.
   static String get baseUrl {
     if (_override.isNotEmpty) return _override;
+    if (kReleaseMode) return prodBaseUrl;
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:8000/api';
     }

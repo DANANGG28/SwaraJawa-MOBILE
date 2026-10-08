@@ -184,6 +184,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _deleteSession(ChatSessionInfo session) async {
+    final chat = context.read<AppState>().chat;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -196,7 +197,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (confirmed != true) return;
     try {
-      await context.read<AppState>().chat.hapusSesi(session.id);
+      await chat.hapusSesi(session.id);
       if (!mounted) return;
       setState(() {
         _sessions.removeWhere((s) => s.id == session.id);

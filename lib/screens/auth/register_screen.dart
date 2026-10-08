@@ -143,7 +143,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               _errorBox(_error!),
                               const SizedBox(height: 16),
                             ],
-                            AuthFieldLabel('Nama Lengkap'),
+                            const AuthFieldLabel('Nama Lengkap'),
                             const SizedBox(height: 6),
                             AuthTextField(
                               controller: _nama,
@@ -163,7 +163,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               },
                             ),
                             const SizedBox(height: 14),
-                            AuthFieldLabel('Nomor Induk Siswa (NIS)'),
+                            const AuthFieldLabel('Nomor Induk Siswa (NIS)'),
                             const SizedBox(height: 6),
                             AuthTextField(
                               controller: _nis,
@@ -182,15 +182,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               },
                             ),
                             const SizedBox(height: 14),
-                            AuthFieldLabel('Kelas'),
+                            const AuthFieldLabel('Kelas'),
                             const SizedBox(height: 6),
                             _kelasDropdown(),
                             const SizedBox(height: 14),
-                            AuthFieldLabel('Jenis Kelamin'),
+                            const AuthFieldLabel('Jenis Kelamin'),
                             const SizedBox(height: 6),
                             _genderSelector(),
                             const SizedBox(height: 14),
-                            AuthFieldLabel('Email Siswa'),
+                            const AuthFieldLabel('Email Siswa'),
                             const SizedBox(height: 6),
                             AuthTextField(
                               controller: _email,
@@ -207,7 +207,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               },
                             ),
                             const SizedBox(height: 14),
-                            AuthFieldLabel('Kata Sandi'),
+                            const AuthFieldLabel('Kata Sandi'),
                             const SizedBox(height: 6),
                             AuthTextField(
                               controller: _password,
@@ -229,7 +229,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               },
                             ),
                             const SizedBox(height: 14),
-                            AuthFieldLabel('Konfirmasi Kata Sandi'),
+                            const AuthFieldLabel('Konfirmasi Kata Sandi'),
                             const SizedBox(height: 6),
                             AuthTextField(
                               controller: _konfirmasi,
@@ -260,14 +260,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               onPressed: (_loading || _googleLoading) ? null : _submit,
                             ),
                             const SizedBox(height: 22),
-                            Row(
+                            const Row(
                               children: [
-                                const Expanded(child: Divider(color: AppColors.surfaceContainerHigh, height: 1)),
+                                Expanded(child: Divider(color: AppColors.surfaceContainerHigh, height: 1)),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                                  padding: EdgeInsets.symmetric(horizontal: 14),
                                   child: SjLabelUpper('atau', size: 11, letterSpacing: 1.4),
                                 ),
-                                const Expanded(child: Divider(color: AppColors.surfaceContainerHigh, height: 1)),
+                                Expanded(child: Divider(color: AppColors.surfaceContainerHigh, height: 1)),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -331,7 +331,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _kelasDropdown() {
     return DropdownButtonFormField<String>(
-      value: _kelas,
+      initialValue: _kelas,
       isExpanded: true,
       decoration: InputDecoration(
         filled: true,

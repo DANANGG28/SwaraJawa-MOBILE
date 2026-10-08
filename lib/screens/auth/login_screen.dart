@@ -104,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               _errorBox(_error!),
                               const SizedBox(height: 16),
                             ],
-                            AuthFieldLabel('Email'),
+                            const AuthFieldLabel('Email'),
                             const SizedBox(height: 6),
                             AuthTextField(
                               controller: _email,
@@ -121,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               trailing: GestureDetector(
                                 onTap: () => _showInfo(
                                     'Buka halaman lupa sandi melalui website SINAU APP.'),
-                                child: SjLabelUpper(
+                                child: const SjLabelUpper(
                                   'Lupa?',
                                   size: 11,
                                   color: AppColors.primary600,

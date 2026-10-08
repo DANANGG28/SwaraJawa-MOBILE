@@ -88,6 +88,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final appState = context.read<AppState>();
     setState(() => _saving = true);
     try {
       final form = FormData.fromMap({
@@ -102,9 +103,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (_foto != null)
           'foto': await MultipartFile.fromFile(_foto!.path, filename: 'foto.jpg'),
       });
-      await context.read<AppState>().client.postMultipart('/profil/data', formData: form);
+      await appState.client.postMultipart('/profil/data', formData: form);
       if (!mounted) return;
-      await context.read<AppState>().refreshSiswa();
+      await appState.refreshSiswa();
       if (!mounted) return;
       _snack('Perubahan berhasil disimpan.');
       Navigator.of(context).pop();
@@ -682,7 +683,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Widget _kelasDropdown() {
     return DropdownButtonFormField<String>(
-      value: _kelas,
+      initialValue: _kelas,
       isExpanded: true,
       decoration: InputDecoration(
         filled: true,
