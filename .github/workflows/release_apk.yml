@@ -62,7 +62,7 @@ jobs:
             exit 0
           fi
           SDKMANAGER="$(ls -d "${ANDROID_HOME}"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"
-          yes | "${SDKMANAGER}" --install "ndk;28.2.13676358"
+          "${SDKMANAGER}" --install "ndk;28.2.13676358"
           test -d "${ANDROID_HOME}/ndk/28.2.13676358"
 
       - name: Set up Gradle cache
