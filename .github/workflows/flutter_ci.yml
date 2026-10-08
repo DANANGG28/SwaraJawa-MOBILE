@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
@@ -64,12 +64,20 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       # `android/app/build.gradle.kts` memakai ndkVersion 28.2.13676358.
-      - name: Install NDK
-        run: sdkmanager --install "ndk;28.2.13676358"
+      # Runner GitHub sudah menyediakan Android SDK; android-actions/setup-android
+      # tidak dipakai karena menginstal paket `tools` yang sudah dihapus.
+      - name: Install Android NDK
+        run: |
+          set -euo pipefail
+          ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          if [ -d "${ANDROID_HOME}/ndk/28.2.13676358" ]; then
+            echo "NDK 28.2.13676358 sudah tersedia."
+            exit 0
+          fi
+          SDKMANAGER="$(ls -d "${ANDROID_HOME}"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"
+          yes | "${SDKMANAGER}" --install "ndk;28.2.13676358"
+          test -d "${ANDROID_HOME}/ndk/28.2.13676358"
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
