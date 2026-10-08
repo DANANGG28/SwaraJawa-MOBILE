@@ -308,7 +308,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, constraints) {
         final w = constraints.maxWidth;
         final cardW = math.min(238.0, w * 0.74);
-        final minX = 38.0 + 16.0;
+        const minX = 38.0 + 16.0;
         final maxX = w - 38.0 - 16.0;
 
         double xFor(int i) {

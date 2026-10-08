@@ -118,6 +118,30 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
   Future<void> _submit() async {
     final soal = _soal;
     if (soal == null || _jawaban == null || _submitting) return;
+    if (soal.tipeEfektif == Soal.tipeMenulisAksara) {
+      int countPts(dynamic j) {
+        if (j is! Map) return 0;
+        var pathsPts = 0;
+        var strokesPts = 0;
+        final paths = j['paths'];
+        if (paths is List) {
+          for (final s in paths) {
+            if (s is List) pathsPts += s.length;
+          }
+        }
+        final strokes = j['strokes'];
+        if (strokes is List) {
+          for (final s in strokes) {
+            if (s is List) strokesPts += s.length;
+          }
+        }
+        return pathsPts > strokesPts ? pathsPts : strokesPts;
+      }
+      if (countPts(_jawaban) < 10) {
+        _snack('Lengkapi goresan dulu sebelum periksa.');
+        return;
+      }
+    }
     _click();
     setState(() => _submitting = true);
     try {

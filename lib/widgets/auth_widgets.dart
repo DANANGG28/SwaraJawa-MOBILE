@@ -64,33 +64,6 @@ class SjLogo extends StatelessWidget {
   }
 }
 
-class _BoltPainter extends CustomPainter {
-  _BoltPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    final path = Path()
-      ..moveTo(size.width * 0.55, 0)
-      ..lineTo(size.width * 0.05, size.height * 0.57)
-      ..lineTo(size.width * 0.42, size.height * 0.57)
-      ..lineTo(size.width * 0.3, size.height)
-      ..lineTo(size.width * 0.95, size.height * 0.4)
-      ..lineTo(size.width * 0.55, size.height * 0.4)
-      ..lineTo(size.width * 0.72, 0)
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _BoltPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
 /// Kartu putih standar halaman auth.
 class AuthCard extends StatelessWidget {
   const AuthCard({super.key, required this.child, this.maxWidth = 460});

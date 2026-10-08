@@ -164,7 +164,7 @@ class _FeedbackDialog extends StatelessWidget {
                   bg: const Color(0xFFFEFCE8),
                   border: const Color(0xFFFDE68A),
                   valueColor: const Color(0xFFB45309),
-                  leading: Icon(Symbols.star, size: 15, color: const Color(0xFFF59E0B)),
+                  leading: const Icon(Symbols.star, size: 15, color: Color(0xFFF59E0B)),
                 ),
                 const SizedBox(width: 8),
                 _statTile(
