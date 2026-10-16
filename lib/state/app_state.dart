@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../core/network/api_client.dart';
+import '../core/theme/app_fonts.dart';
 import '../models/siswa.dart';
 import '../services/auth_service.dart';
 import '../services/badge_service.dart';
@@ -52,6 +53,8 @@ class AppState extends ChangeNotifier {
   Future<void> bootstrap() async {
     status = AuthStatus.loading;
     notifyListeners();
+    // Unduh/siapkan font aksara Jawa di latar belakang agar kuis tracing tidak kotak-kotak
+    unawaited(AppFonts.preloadJavanese());
     try {
       final user = await auth.me();
       if (user != null) {

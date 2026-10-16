@@ -51,16 +51,35 @@ class AppFonts {
         letterSpacing: letterSpacing,
       );
 
-  /// Font aksara Jawa (Noto Sans Javanese) — opsional, fallback ke Manrope.
+  /// Font aksara Jawa (Noto Sans Javanese) — GoogleFonts dengan fallback NotoSansJavanese.
   static TextStyle javanese({
     double? size,
     FontWeight weight = FontWeight.w400,
     Color? color,
-  }) =>
-      TextStyle(
+  }) {
+    try {
+      return GoogleFonts.notoSansJavanese(
+        fontSize: size,
+        fontWeight: weight,
+        color: color,
+      );
+    } catch (_) {
+      return TextStyle(
         fontFamily: 'NotoSansJavanese',
         fontSize: size,
         fontWeight: weight,
         color: color,
       );
+    }
+  }
+
+  /// Preload font aksara Jawa agar langsung siap digunakan tanpa jeda kotak-kotak (tofu).
+  static Future<void> preloadJavanese() async {
+    try {
+      await GoogleFonts.pendingFonts([
+        GoogleFonts.notoSansJavanese(fontWeight: FontWeight.w400),
+        GoogleFonts.notoSansJavanese(fontWeight: FontWeight.w700),
+      ]);
+    } catch (_) {}
+  }
 }
