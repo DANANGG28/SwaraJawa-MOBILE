@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -442,9 +441,6 @@ class _TracingViewState extends State<TracingView>
 
   /// Jeda sebelum goresan otomatis dihapus jika keluar bingkai (< 70%).
   static const Duration kRetryDelay = Duration(milliseconds: 800);
-
-  /// Toleransi jarak sentuhan jari di sekitar area batas bingkai aksara.
-  static const double kFramePadding = 24.0;
 
   // Animasi saat jawaban dinilai benar
   late final AnimationController _controller = AnimationController(
