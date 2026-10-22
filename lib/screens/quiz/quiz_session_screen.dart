@@ -364,6 +364,7 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
             soal: soal,
             benar: _result?.benar,
             onExpandDone: _afterTracingExpand,
+            onTts: () => _playTts(soal),
             onChanged: (j) => setState(() => _jawaban = j),
           ),
         );
@@ -463,7 +464,12 @@ class _QuizSessionScreenState extends State<QuizSessionScreen> {
   Future<void> _playTts(Soal soal) async {
     try {
       final SpeechService speech = context.read<AppState>().speech;
-      final res = await speech.tts(soal.pertanyaan);
+      final textToSpeak = (soal.tipeEfektif == Soal.tipeMenulisAksara &&
+              soal.soalLatin != null &&
+              soal.soalLatin!.trim().isNotEmpty)
+          ? soal.soalLatin!.trim()
+          : (soal.pertanyaan.isNotEmpty ? soal.pertanyaan : soal.aksara);
+      final res = await speech.tts(textToSpeak);
       await TtsPlayback.playTts(_ttsPlayer, res);
     } catch (e, s) {
       // Audio hanya pambantu — catat galat agar terlihat di logcat.

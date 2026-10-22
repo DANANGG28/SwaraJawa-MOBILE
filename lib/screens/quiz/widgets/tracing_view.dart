@@ -1,202 +1,401 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_fonts.dart';
 import '../../../models/soal.dart';
 
-TextStyle _guideStyle(double fontSize, Color color) =>
-    AppFonts.javanese(size: fontSize, color: color);
-
-/// Fraksi kanvas yang ditempati aksara panduan (1.0 = mentok tepi).
-const double kGuideFill = 0.94;
-
-/// Ukuran font acuan saat mengukur metrik raster aksara.
-const double _refFontSize = 256;
-
-/// Metrik aksara dalam satuan em (per 1 px ukuran font): box layout yang
-/// dilaporkan TextPainter beserta bbox ink di dalamnya.
-///
-/// Font aksara Jawa (mis. Noto Sans Javanese) menyediakan ruang vertikal
-/// untuk sandhangan bertumpuk, sehingga box layout jauh lebih tinggi dari
-/// bentuk aksara itu sendiri. Memakai box layout sebagai dasar penskalaan
-/// membuat panduan tampak kecil di kanvas, jadi yang dipakai adalah bbox ink.
-class GuideMetrics {
-  const GuideMetrics({
-    required this.boxW,
-    required this.boxH,
-    required this.inkLeft,
-    required this.inkTop,
-    required this.inkW,
-    required this.inkH,
-  });
-
-  final double boxW;
-  final double boxH;
-  final double inkLeft;
-  final double inkTop;
-  final double inkW;
-  final double inkH;
+TextStyle _guideStyle(
+  double fontSize,
+  Color color, {
+  FontWeight weight = FontWeight.w700,
+}) {
+  try {
+    return GoogleFonts.notoSansJavanese(
+      fontSize: fontSize,
+      fontWeight: weight,
+      color: color,
+    );
+  } catch (_) {
+    return AppFonts.javanese(size: fontSize, weight: weight, color: color);
+  }
 }
 
-/// Posisi dan ukuran aksara panduan di kanvas. Dipakai bersama oleh painter
-/// (menggambar) dan normalisasi goresan (kirim ke backend) agar keduanya
-/// tidak pernah memakai box berbeda.
-class GuideGeometry {
-  const GuideGeometry({
+/// Geometri dan objek TextPainter panduan aksara yang di-cache agar rendering 60-120fps mulus.
+class GuideRenderCache {
+  const GuideRenderCache({
     required this.ink,
     required this.paintOffset,
     required this.fontSize,
+    required this.widthStretch,
+    required this.heightStretch,
+    required this.sketchFillPainter,
+    required this.sketchStrokePainter,
+    required this.solidBlockPainter,
   });
 
-  /// Rect ink aksara di koordinat kanvas — box normalisasi goresan sekaligus
-  /// acuan pemetaan `kunci_jawaban.paths`.
   final Rect ink;
-
-  /// Titik gambar box layout TextPainter (ascent/descent termasuk di atasnya).
   final Offset paintOffset;
-
   final double fontSize;
+  final double widthStretch;
+  final double heightStretch;
+
+  /// Sketsa panduan awal sebelum selesai menggambar
+  final TextPainter sketchFillPainter;
+
+  /// Garis putih outline tebal pada frame sketsa yang SELALU BERTAHAN membingkai aksara
+  final TextPainter sketchStrokePainter;
+
+  /// Blok warna penuh aksara dengan warna hijau yang sama dengan garis user (#34D399)
+  final TextPainter solidBlockPainter;
 }
 
-final Map<String, GuideMetrics> _guideMetrics = <String, GuideMetrics>{};
-final Set<String> _guideMetricsPending = <String>{};
-final Set<String> _guideMetricsFailed = <String>{};
-
-/// Metrik raster [guide] bila sudah terukur, null bila belum/tak terukur.
-GuideMetrics? guideMetricsFor(String guide) => _guideMetrics[guide];
-
-/// Ukur bbox ink [guide] sekali per string lalu simpan di cache proses.
-/// Mengembalikan true bila cache bertambah (pemanggil perlu repaint).
-Future<bool> ensureGuideMetrics(String guide) async {
-  if (guide.isEmpty ||
-      _guideMetrics.containsKey(guide) ||
-      _guideMetricsPending.contains(guide) ||
-      _guideMetricsFailed.contains(guide)) {
-    return false;
+/// Menghitung geometri aksara agar SELALU berada tepat di tengah-tengah kanvas (center-aligned),
+/// dengan jalur yang TEBAL, LEBAR KE SAMPING (~34%) dan LEBAR/TINGGI KE ATAS (~30%),
+/// sehingga lekukan dan puncak aksara sangat tinggi, lapang, dan mudah ditelusuri oleh jari.
+GuideRenderCache? buildGuideRenderCache(Size canvasSize, String guide) {
+  if (guide.isEmpty || canvasSize.width <= 0 || canvasSize.height <= 0) {
+    return null;
   }
-  _guideMetricsPending.add(guide);
-  try {
-    final metrics = await _measureGuideMetrics(guide);
-    if (metrics == null) {
-      _guideMetricsFailed.add(guide);
-      return false;
-    }
-    _guideMetrics[guide] = metrics;
-    return true;
-  } catch (_) {
-    // Raster tak tersedia (mis. binding tanpa GPU): pakai box layout.
-    _guideMetricsFailed.add(guide);
-    return false;
-  } finally {
-    _guideMetricsPending.remove(guide);
-  }
-}
 
-Future<GuideMetrics?> _measureGuideMetrics(String guide) async {
-  final tp = TextPainter(
-    text: TextSpan(text: guide, style: _guideStyle(_refFontSize, Colors.white)),
+  // 1. Ukur dimensi acuan untuk menghitung rasio lebar & baseline dengan bobot font tebal (w700)
+  const refSize = 100.0;
+  final refTp = TextPainter(
+    text: TextSpan(
+      text: guide,
+      style: _guideStyle(refSize, Colors.white, weight: FontWeight.w700),
+    ),
     textDirection: TextDirection.ltr,
+    textAlign: TextAlign.center,
   )..layout();
-  final w = tp.width.ceil() + 2;
-  final h = tp.height.ceil() + 2;
-  if (w <= 2 || h <= 2) return null;
 
-  final recorder = ui.PictureRecorder();
-  tp.paint(Canvas(recorder), const Offset(1, 1));
-  final picture = recorder.endRecording();
-  final image = await picture.toImage(w, h);
-  final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-  image.dispose();
-  picture.dispose();
-  if (data == null) return null;
+  final refW = refTp.width > 0 ? refTp.width : (refSize * 0.85);
+  final lmList = refTp.computeLineMetrics();
+  final refBaseline = lmList.isNotEmpty ? lmList.first.baseline : (refSize * 1.15);
 
-  final bytes = data.buffer.asUint8List();
-  var minX = w, minY = h, maxX = -1, maxY = -1;
-  for (var y = 0; y < h; y++) {
-    final row = y * w * 4;
-    for (var x = 0; x < w; x++) {
-      if (bytes[row + x * 4 + 3] > 8) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
+  const visualHeightRatio = 0.60;
+  final visualWidthRatio = (refW / refSize).clamp(0.40, 2.20);
+
+  // Melebarkan aksara secara horizontal (~34%) dan vertikal/menjulang ke atas (~30%)
+  const widthStretch = 1.34;
+  const heightStretch = 1.30;
+
+  // 2. Skala ukuran font lebih besar dan tinggi ke atas (mengisi kanvas dengan proporsi lapang)
+  final scaleW = (canvasSize.width * 0.94) / (visualWidthRatio * widthStretch);
+  final scaleH = (canvasSize.height * 0.90) / (visualHeightRatio * heightStretch);
+  final fontSize = math.min(scaleW, scaleH).clamp(52.0, 480.0);
+
+  // 3. Hitung posisi tepat di tengah kanvas
+  final cx = canvasSize.width / 2;
+  final cy = canvasSize.height / 2;
+
+  final baseline = fontSize * (refBaseline / refSize);
+  final paintX = cx - (refW * (fontSize / refSize) / 2);
+
+  // Titik pusat visual vertikal konsonan aksara Jawa
+  final visualCenterInBox = baseline - (fontSize * 0.28);
+  final paintY = cy - visualCenterInBox;
+
+  final inkW = fontSize * visualWidthRatio * widthStretch;
+  final inkH = fontSize * visualHeightRatio * heightStretch;
+  final inkRect = Rect.fromCenter(
+    center: Offset(cx, cy),
+    width: inkW,
+    height: inkH,
+  );
+  final paintOffset = Offset(paintX, paintY);
+
+  // 4. Fill lembut awal sketsa (area badan aksara lebih jelas terlihat jalurnya)
+  final sketchFill = TextPainter(
+    text: TextSpan(
+      text: guide,
+      style: _guideStyle(
+        fontSize,
+        Colors.white.withValues(alpha: 0.20),
+        weight: FontWeight.w700,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    textAlign: TextAlign.center,
+  )..layout();
+
+  // 5. Garis putih elegan dan rapi (2.0px) frame sketsa membingkai jalur aksara dengan bersih
+  final sketchStroke = TextPainter(
+    text: TextSpan(
+      text: guide,
+      style: _guideStyle(
+        fontSize,
+        Colors.white,
+        weight: FontWeight.w700,
+      ).copyWith(
+        foreground: Paint()
+          ..color = Colors.white.withValues(alpha: 0.95)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0 // Garis outline lebih tipis dan rapi
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    textAlign: TextAlign.center,
+  )..layout();
+
+  // 6. Blok penuh warna hijau aksara — warna SAMA PERSIS dengan garis user: #34D399 (Emerald)
+  final solidBlock = TextPainter(
+    text: TextSpan(
+      text: guide,
+      style: _guideStyle(
+        fontSize,
+        const Color(0xFF34D399),
+        weight: FontWeight.w700,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    textAlign: TextAlign.center,
+  )..layout();
+
+  return GuideRenderCache(
+    ink: inkRect,
+    paintOffset: paintOffset,
+    fontSize: fontSize,
+    widthStretch: widthStretch,
+    heightStretch: heightStretch,
+    sketchFillPainter: sketchFill,
+    sketchStrokePainter: sketchStroke,
+    solidBlockPainter: solidBlock,
+  );
+}
+
+/// Algoritma penipisan Zhang-Suen untuk mengekstrak skeleton 1-piksel aksara
+/// menyamai implementasi Web (aksara-tracing-canvas.js).
+List<int> _thinZhangSuen(List<bool> img, int w, int h) {
+  final copy = List<int>.generate(w * h, (i) => img[i] ? 1 : 0);
+  int at(int x, int y) => copy[y * w + x];
+  var changed = true;
+
+  while (changed) {
+    changed = false;
+    for (var step = 0; step < 2; step++) {
+      final del = <int>[];
+      for (var y = 1; y < h - 1; y++) {
+        for (var x = 1; x < w - 1; x++) {
+          final i = y * w + x;
+          if (copy[i] == 0) continue;
+          final p2 = at(x, y - 1);
+          final p3 = at(x + 1, y - 1);
+          final p4 = at(x + 1, y);
+          final p5 = at(x + 1, y + 1);
+          final p6 = at(x, y + 1);
+          final p7 = at(x - 1, y + 1);
+          final p8 = at(x - 1, y);
+          final p9 = at(x - 1, y - 1);
+          final b = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
+          if (b < 2 || b > 6) continue;
+          final seq = [p2, p3, p4, p5, p6, p7, p8, p9, p2];
+          var a = 0;
+          for (var k = 0; k < 8; k++) {
+            if (seq[k] == 0 && seq[k + 1] == 1) a++;
+          }
+          if (a != 1) continue;
+          if (step == 0) {
+            if (p2 * p4 * p6 != 0) continue;
+            if (p4 * p6 * p8 != 0) continue;
+          } else {
+            if (p2 * p4 * p8 != 0) continue;
+            if (p2 * p6 * p8 != 0) continue;
+          }
+          del.add(i);
+        }
+      }
+      if (del.isNotEmpty) {
+        for (final i in del) {
+          copy[i] = 0;
+        }
+        changed = true;
       }
     }
   }
-  if (maxX < 0) return null;
-
-  const k = 1 / _refFontSize;
-  return GuideMetrics(
-    boxW: tp.width * k,
-    boxH: tp.height * k,
-    inkLeft: (minX - 1) * k,
-    inkTop: (minY - 1) * k,
-    inkW: (maxX - minX + 1) * k,
-    inkH: (maxY - minY + 1) * k,
-  );
+  return copy;
 }
 
-/// Geometri panduan untuk [canvasSize]. Metrik ink sudah terukur → aksara
-/// diskalakan hampir memenuhi sisi pembatas kanvas. Belum terukur → mundur ke
-/// box layout TextPainter yang dipaskan ke kanvas.
-GuideGeometry guideGeometryFor(Size canvasSize, String guide) {
-  if (guide.isEmpty || canvasSize.width <= 0 || canvasSize.height <= 0) {
-    return const GuideGeometry(ink: Rect.zero, paintOffset: Offset.zero, fontSize: 0);
+List<Offset> _normalizeToBounds(List<Offset> pts) {
+  if (pts.length < 2) return pts;
+  var minX = pts[0].dx;
+  var maxX = pts[0].dx;
+  var minY = pts[0].dy;
+  var maxY = pts[0].dy;
+  for (final p in pts) {
+    if (p.dx < minX) minX = p.dx;
+    if (p.dx > maxX) maxX = p.dx;
+    if (p.dy < minY) minY = p.dy;
+    if (p.dy > maxY) maxY = p.dy;
   }
-
-  final m = _guideMetrics[guide];
-  if (m != null && m.inkW > 0 && m.inkH > 0) {
-    final fontSize = math.min(
-      canvasSize.width * kGuideFill / m.inkW,
-      canvasSize.height * kGuideFill / m.inkH,
-    );
-    final inkW = m.inkW * fontSize;
-    final inkH = m.inkH * fontSize;
-    final left = (canvasSize.width - inkW) / 2;
-    final top = (canvasSize.height - inkH) / 2;
-    return GuideGeometry(
-      ink: Rect.fromLTWH(left, top, inkW, inkH),
-      paintOffset: Offset(left - m.inkLeft * fontSize, top - m.inkTop * fontSize),
-      fontSize: fontSize,
-    );
-  }
-
-  var size = canvasSize.height;
-  for (var i = 0; i < 3; i++) {
-    final tp = TextPainter(
-      text: TextSpan(text: guide, style: _guideStyle(size, Colors.white)),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    if (tp.width <= 0 || tp.height <= 0) break;
-    final scale = math.min(
-      canvasSize.width * kGuideFill / tp.width,
-      canvasSize.height * kGuideFill / tp.height,
-    );
-    size *= scale;
-    if ((scale - 1).abs() < 0.005) break;
-  }
-  final tp = TextPainter(
-    text: TextSpan(text: guide, style: _guideStyle(size, Colors.white)),
-    textDirection: TextDirection.ltr,
-  )..layout();
-  final left = (canvasSize.width - tp.width) / 2;
-  final top = (canvasSize.height - tp.height) / 2;
-  return GuideGeometry(
-    ink: Rect.fromLTWH(left, top, tp.width, tp.height),
-    paintOffset: Offset(left, top),
-    fontSize: size,
-  );
+  final w = math.max(1e-4, maxX - minX);
+  final h = math.max(1e-4, maxY - minY);
+  return [for (final p in pts) Offset((p.dx - minX) / w, (p.dy - minY) / h)];
 }
 
-/// Box panduan aksara dalam koordinat kanvas. Fungsi murni agar pengukuran
-/// untuk tampilan (painter) dan payload kirim selalu sama.
-Rect guideBoxFor(Size canvasSize, String guide) =>
-    guideGeometryFor(canvasSize, guide).ink;
+double _meanNearestDistance(List<Offset> src, List<Offset> target) {
+  if (src.isEmpty || target.isEmpty) return 0.0;
+  var sum = 0.0;
+  for (final p in src) {
+    var best = double.infinity;
+    for (final q in target) {
+      final dx = p.dx - q.dx;
+      final dy = p.dy - q.dy;
+      final d = dx * dx + dy * dy;
+      if (d < best) best = d;
+    }
+    sum += math.sqrt(best);
+  }
+  return sum / src.length;
+}
+
+/// Menghitung skor kemiripan goresan dengan template acuan ($1 Unistroke / traceCoverage)
+/// persis menyamai algoritma di Web (aksara-tracing-canvas.js & DollarRecognizer::traceCoverage).
+double _calculateTraceCoverage(
+  List<List<Offset>> candidateStrokes,
+  List<List<Offset>> templateStrokes, {
+  double tolerance = 0.35,
+}) {
+  final candidate = <Offset>[];
+  for (final s in candidateStrokes) {
+    candidate.addAll(s);
+  }
+  final template = <Offset>[];
+  for (final s in templateStrokes) {
+    template.addAll(s);
+  }
+  if (candidate.length < 2 || template.length < 2) return 0.0;
+
+  final normCandidate = _normalizeToBounds(candidate);
+  final normTemplate = _normalizeToBounds(template);
+
+  final avg = (_meanNearestDistance(normCandidate, normTemplate) +
+          _meanNearestDistance(normTemplate, normCandidate)) /
+      2.0;
+
+  return (1.0 - (avg / math.max(1e-6, tolerance))).clamp(0.0, 1.0);
+}
+
+/// Masker hit-test berbasis raster dari bentuk aksara (Noto Sans Javanese).
+/// Memungkinkan deteksi akurat apakah goresan menyentuh jalur aksara atau
+/// mencorat-coret di ruang kosong / luar template aksara.
+class _GlyphHitMask {
+  const _GlyphHitMask({
+    required this.width,
+    required this.height,
+    required this.scale,
+    required this.grid,
+    this.templateStrokes = const [],
+  });
+
+  final int width;
+  final int height;
+  final double scale;
+  final List<bool> grid;
+  final List<List<Offset>> templateStrokes;
+
+  bool isHit(double x, double y) {
+    final ix = (x * scale).round();
+    final iy = (y * scale).round();
+    if (ix < 0 || ix >= width || iy < 0 || iy >= height) return false;
+    return grid[iy * width + ix];
+  }
+}
+
+Future<_GlyphHitMask?> _buildGlyphMask(
+  Size size,
+  GuideRenderCache cache,
+) async {
+  try {
+    const targetDim = 120.0;
+    final maxDim = math.max(size.width, size.height);
+    if (maxDim <= 0) return null;
+    final scale = targetDim / maxDim;
+    final w = (size.width * scale).round().clamp(40, 200);
+    final h = (size.height * scale).round().clamp(40, 200);
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(scale, scale);
+
+    canvas.save();
+    canvas.translate(cache.ink.center.dx, cache.ink.center.dy);
+    canvas.scale(cache.widthStretch, cache.heightStretch);
+    canvas.translate(-cache.ink.center.dx, -cache.ink.center.dy);
+
+    cache.solidBlockPainter.paint(canvas, cache.paintOffset);
+    cache.sketchStrokePainter.paint(canvas, cache.paintOffset);
+    canvas.restore();
+
+    final pic = recorder.endRecording();
+    final img = await pic.toImage(w, h);
+    final bd = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (bd == null) return null;
+
+    final bytes = bd.buffer.asUint8List();
+    final raw = List<bool>.filled(w * h, false);
+    for (var i = 0; i < w * h; i++) {
+      if (bytes[i * 4 + 3] > 20) {
+        raw[i] = true;
+      }
+    }
+
+    // Ekstraksi garis skeleton 1-piksel untuk template acuan penilaian (menyulap font menjadi vektor)
+    final thinned = _thinZhangSuen(raw, w, h);
+    final skeletonPts = <Offset>[];
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (thinned[y * w + x] != 0) {
+          skeletonPts.add(Offset(x.toDouble(), y.toDouble()));
+        }
+      }
+    }
+    final templateStrokes = <List<Offset>>[];
+    if (skeletonPts.length >= 2) {
+      templateStrokes.add(_normalizeToBounds(skeletonPts));
+    }
+
+    // Dilasi jari: radius 4 (~16-20px pada kanvas) memberi koridor sentuh yang wajar
+    final dilated = List<bool>.filled(w * h, false);
+    const radius = 4;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (raw[y * w + x]) {
+          for (var dy = -radius; dy <= radius; dy++) {
+            final ny = y + dy;
+            if (ny < 0 || ny >= h) continue;
+            for (var dx = -radius; dx <= radius; dx++) {
+              final nx = x + dx;
+              if (nx < 0 || nx >= w) continue;
+              if (dx * dx + dy * dy <= radius * radius) {
+                dilated[ny * w + nx] = true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return _GlyphHitMask(
+      width: w,
+      height: h,
+      scale: scale,
+      grid: dilated,
+      templateStrokes: templateStrokes,
+    );
+  } catch (e) {
+    debugPrint('[TracingView] Gagal buildGlyphMask: $e');
+    return null;
+  }
+}
 
 class TracingView extends StatefulWidget {
   const TracingView({
@@ -214,8 +413,7 @@ class TracingView extends StatefulWidget {
   /// Status penilaian: null = belum diperiksa, true = benar, false = salah.
   final bool? benar;
 
-  /// Dipanggil setelah animasi "mengembang" selesai (atau langsung bila tak ada
-  /// yang perlu dianimasikan) agar parent menampilkan kartu hasil.
+  /// Dipanggil setelah animasi selesai agar parent menampilkan modal/kartu hasil.
   final VoidCallback? onExpandDone;
   final VoidCallback? onTts;
 
@@ -224,27 +422,47 @@ class TracingView extends StatefulWidget {
 }
 
 class _TracingViewState extends State<TracingView>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final List<List<Offset>> _strokes = [];
   List<Offset>? _current;
-  String _status = 'Goresan Aktif';
   Size _canvasSize = const Size(0, 0);
 
-  /// Mencegah penjadwalan setState pasca-frame berulang sebelum viewport
-  /// scrollable terukur (frame pertama).
+  GuideRenderCache? _guideCache;
+  _GlyphHitMask? _glyphMask;
   bool _viewportMeasured = false;
+  bool _fontReady = false;
+  Timer? _stopDrawTimer;
+  Timer? _retryTimer;
+  String? _statusMessage;
+  bool _statusIsError = false;
 
+  /// Ambang batas akurasi frame aksara (70%).
+  static const double kPassThreshold = 70.0;
+
+  /// Jeda sebelum goresan otomatis dihapus jika keluar bingkai (< 70%).
+  static const Duration kRetryDelay = Duration(milliseconds: 800);
+
+  // Animasi saat jawaban dinilai benar
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: const Duration(milliseconds: 800),
   );
   late final Animation<double> _expand = CurvedAnimation(
     parent: _controller,
     curve: Curves.easeOutCubic,
   );
 
-  bool get _locked => widget.benar != null;
+  // Animasi transisi saat warna aksara mulai menjadi full hijau
+  late final AnimationController _fillController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 400),
+  );
+  late final Animation<double> _fillAnimation = CurvedAnimation(
+    parent: _fillController,
+    curve: Curves.easeInOut,
+  );
 
+  bool get _locked => widget.benar != null;
   bool get _success => widget.benar == true;
 
   @override
@@ -253,60 +471,111 @@ class _TracingViewState extends State<TracingView>
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) widget.onExpandDone?.call();
     });
-    _measureGuide();
+    _ensureFontLoaded();
+  }
+
+  /// Memastikan font Noto Sans Javanese selesai diunduh & dimuat ke engine Flutter.
+  /// Setelah font terpasang, re-layout TextPainter agar bentuk aksara asli tampil
+  /// sempurna dan TIDAK menghasilkan kotak-kotak (tofu).
+  void _ensureFontLoaded() {
+    AppFonts.preloadJavanese().then((_) {
+      if (!mounted) return;
+      setState(() {
+        _fontReady = true;
+        if (_canvasSize.width > 0 && _canvasSize.height > 0) {
+          _guideCache = buildGuideRenderCache(_canvasSize, widget.soal.aksara);
+          _updateMask();
+        }
+      });
+    }).catchError((_) {
+      if (mounted) setState(() => _fontReady = true);
+    });
+  }
+
+  void _updateMask() {
+    final cache = _guideCache;
+    final size = _canvasSize;
+    if (cache == null || size.width <= 0 || size.height <= 0) return;
+    _buildGlyphMask(size, cache).then((mask) {
+      if (mounted && mask != null) {
+        _glyphMask = mask;
+      }
+    });
   }
 
   @override
   void didUpdateWidget(covariant TracingView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.soal.aksara != widget.soal.aksara) _measureGuide();
+    if (widget.soal.aksara != oldWidget.soal.aksara) {
+      _stopDrawTimer?.cancel();
+      _retryTimer?.cancel();
+      _fillController.reset();
+      _guideCache = buildGuideRenderCache(_canvasSize, widget.soal.aksara);
+      _glyphMask = null;
+      _updateMask();
+      _strokes.clear();
+      _current = null;
+      _statusMessage = null;
+      _statusIsError = false;
+    }
+
     if (widget.benar == true && oldWidget.benar != true) {
-      setState(() => _status = 'Berhasil! Aksara Sempurna');
+      _fillController.forward();
       if (_strokes.isEmpty) {
         WidgetsBinding.instance
             .addPostFrameCallback((_) => widget.onExpandDone?.call());
       } else {
         _controller.forward(from: 0);
       }
-    } else if (widget.benar == false && oldWidget.benar != false) {
-      setState(() => _status = 'Kurang Tepat, Coba Lagi');
     }
   }
 
   @override
   void dispose() {
+    _stopDrawTimer?.cancel();
+    _retryTimer?.cancel();
     _controller.dispose();
+    _fillController.dispose();
     super.dispose();
   }
 
-  /// Ukur metrik raster aksara (sekali per aksara, cache proses) lalu repaint
-  /// agar panduan memakai ukuran penuh. Frame pertama masih memakai box layout.
-  void _measureGuide() {
-    ensureGuideMetrics(widget.soal.aksara).then((updated) {
-      if (updated && mounted) setState(() {});
-    });
+  void _updateCanvasSize(Size size) {
+    if (_canvasSize != size && size.width > 0 && size.height > 0) {
+      _canvasSize = size;
+      _guideCache = buildGuideRenderCache(_canvasSize, widget.soal.aksara);
+      _updateMask();
+    }
   }
 
-  /// Ruang koordinat ternormalisasi aksara panduan (padanan template web).
-  /// Goresan dikirim sebagai [x, y] relatif ke box ini agar sepadan dengan
-  /// `kunci_jawaban.paths` di backend.
-  Rect _guideBox() => guideBoxFor(_canvasSize, widget.soal.aksara);
+  Rect _guideBox() {
+    return _guideCache?.ink ??
+        Rect.fromCenter(
+          center: Offset(_canvasSize.width / 2, _canvasSize.height / 2),
+          width: _canvasSize.width * 0.94,
+          height: _canvasSize.height * 0.88,
+        );
+  }
 
   List<List<Offset>> _idealNormalized() {
     final out = <List<Offset>>[];
     for (final stroke in widget.soal.paths) {
       final pts = <Offset>[
-        for (final p in stroke) Offset((p['x'] ?? 0).toDouble(), (p['y'] ?? 0).toDouble()),
+        for (final p in stroke)
+          Offset((p['x'] ?? 0).toDouble(), (p['y'] ?? 0).toDouble()),
       ];
       if (pts.isNotEmpty) out.add(pts);
     }
+    if (out.isNotEmpty) return out;
+
+    // Fallback template dari skeleton Noto Sans Javanese jika DB soal belum memiliki paths
+    final maskTpl = _glyphMask?.templateStrokes;
+    if (maskTpl != null && maskTpl.isNotEmpty) {
+      return maskTpl;
+    }
+
     return out;
   }
 
-  /// Normalisasi goresan mentah ke 0..1 relatif [box] untuk payload saja.
-  /// `_strokes` mentah tetap dipakai untuk lukisan. Tiap stroke difilter
-  /// (< 2 titik dibuang, duplikat berurutan < 1px dibuang) lalu diresample
-  /// ke 64 titik equidistant via interpolasi linear.
   List<List<Offset>> _normalizedStrokes(Rect box) {
     final out = <List<Offset>>[];
     for (final s in _strokes) {
@@ -328,8 +597,6 @@ class _TracingViewState extends State<TracingView>
     return out;
   }
 
-  /// Resample [pts] ke [n] titik equidistant. Anti-crash untuk input kosong
-  /// atau satu titik (tak tercapai karena filter di [_normalizedStrokes]).
   List<Offset> _resample(List<Offset> pts, int n) {
     if (pts.isEmpty) return const [];
     if (pts.length == 1) return List<Offset>.filled(n, pts.first);
@@ -358,13 +625,13 @@ class _TracingViewState extends State<TracingView>
     return out;
   }
 
+  /// Dikirim ke parent HANYA saat selesai satu goresan (onPanEnd) atau saat reset.
   void _push() {
     if (_strokes.isEmpty) {
       widget.onChanged(null);
       return;
     }
     final box = _guideBox();
-    if (kDebugMode) debugPrint('[TRACING] box=${box.size} strokes=${_strokes.length} pts=${_strokes.fold<int>(0, (a, s) => a + s.length)} ideal=${widget.soal.paths.length} first=${_strokes.isNotEmpty && _strokes.first.isNotEmpty ? _strokes.first.first : null}');
     final norm = _normalizedStrokes(box);
     widget.onChanged({
       'paths': [
@@ -388,77 +655,190 @@ class _TracingViewState extends State<TracingView>
     });
   }
 
+  /// Menghitung persentase kemiripan goresan terhadap bentuk aksara (0..100%).
+  /// Menggabungkan hit-test raster masker aksara (agar coretan di luar aksara ditolak)
+  /// dan algoritma $1 Unistroke / traceCoverage menyamai Web & DollarRecognizer di server.
+  double _evaluateFrameAccuracy() {
+    if (_strokes.isEmpty) return 0.0;
+
+    var insideCount = 0;
+    var totalCount = 0;
+    final mask = _glyphMask;
+
+    if (mask != null) {
+      for (final stroke in _strokes) {
+        for (final pt in stroke) {
+          totalCount++;
+          if (mask.isHit(pt.dx, pt.dy)) {
+            insideCount++;
+          }
+        }
+      }
+    }
+
+    final maskRatio = totalCount > 0 ? (insideCount / totalCount) : 0.0;
+
+    // Jika dominan corak-coret di luar jalur aksara (< 65% titik kena aksara), langsung gagal
+    if (mask != null && maskRatio < 0.65) {
+      return maskRatio * 100.0;
+    }
+
+    final idealStrokes = _idealNormalized();
+    if (idealStrokes.isNotEmpty) {
+      final normStrokes = _normalizedStrokes(_guideBox());
+      final coverage = _calculateTraceCoverage(normStrokes, idealStrokes);
+      final coveragePercent = coverage * 100.0;
+      if (mask != null) {
+        return math.min(maskRatio * 100.0, coveragePercent);
+      }
+      return coveragePercent;
+    }
+
+    if (totalCount == 0) return 0.0;
+    return maskRatio * 100.0;
+  }
+
+  int _totalStrokePoints() {
+    var count = 0;
+    for (final s in _strokes) {
+      count += s.length;
+    }
+    return count;
+  }
+
   void _reset() {
     if (_locked) return;
+    _stopDrawTimer?.cancel();
+    _retryTimer?.cancel();
+    _fillController.reset();
     setState(() {
       _strokes.clear();
       _current = null;
-      _status = 'Goresan Aktif';
+      _statusMessage = null;
+      _statusIsError = false;
     });
     _push();
   }
 
-  Future<void> _snap() async {
+  void _onPointerDown(PointerDownEvent event) {
     if (_locked) return;
+    _stopDrawTimer?.cancel();
+    _retryTimer?.cancel();
+    if (_fillController.value > 0) {
+      _fillController.reset();
+    }
     setState(() {
-      if (_strokes.isNotEmpty) {
-        final last = _strokes.last;
-        if (last.length > 2) {
-          final smooth = <Offset>[last.first];
-          for (var i = 1; i < last.length - 1; i++) {
-            smooth.add(Offset(
-              (last[i - 1].dx + last[i].dx + last[i + 1].dx) / 3,
-              (last[i - 1].dy + last[i].dy + last[i + 1].dy) / 3,
-            ));
-          }
-          smooth.add(last.last);
-          _strokes[_strokes.length - 1] = smooth;
-        }
+      _current = [event.localPosition];
+      _strokes.add(_current!);
+      if (_statusIsError) {
+        _statusMessage = null;
+        _statusIsError = false;
       }
-      _status = 'Goresan Dirapikan';
     });
-    _push();
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_locked) return;
+    if (_current == null) {
+      setState(() {
+        _current = [event.localPosition];
+        _strokes.add(_current!);
+      });
+      return;
+    }
+    setState(() {
+      _current!.add(event.localPosition);
+    });
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    if (_locked) return;
+    _current = null;
+    _handleStrokeEnd();
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    if (_locked) return;
+    _current = null;
+    _handleStrokeEnd();
+  }
+
+  void _handleStrokeEnd() {
+    if (_locked) return;
+
+    final totalPts = _totalStrokePoints();
+    if (totalPts < 5) {
+      _push();
+      return;
+    }
+
+    final accuracy = _evaluateFrameAccuracy();
+
+    if (accuracy < kPassThreshold) {
+      _stopDrawTimer?.cancel();
+      _retryTimer?.cancel();
+
+      setState(() {
+        _statusIsError = true;
+        _statusMessage = 'Belum sesuai (${accuracy.toInt()}%)';
+      });
+
+      // Kosongkan jawaban agar tombol kirim nonaktif
+      widget.onChanged(null);
+
+      _retryTimer = Timer(kRetryDelay, () {
+        if (!mounted || _locked) return;
+        _reset();
+      });
+    } else {
+      _retryTimer?.cancel();
+      setState(() {
+        _statusIsError = false;
+        _statusMessage = 'Aksara tepat! (${accuracy.toInt()}%)';
+      });
+
+      _push();
+
+      // Saat user selesai menggambar: otomatis isi full warna hijau (#34D399)
+      _stopDrawTimer?.cancel();
+      _stopDrawTimer = Timer(const Duration(milliseconds: 350), () {
+        if (mounted && _strokes.isNotEmpty) {
+          _fillController.forward();
+        }
+      });
+
+      Timer(const Duration(milliseconds: 1500), () {
+        if (mounted && !_statusIsError && _statusMessage != null) {
+          setState(() => _statusMessage = null);
+        }
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Layout fixed setinggi viewport. Parent menaruh TracingView di dalam
-    // SingleChildScrollView yang ruangnya sudah dibatasi Expanded, jadi
-    // SizedBox dibuat pas setinggi ruang tampil — tidak ada sisa scroll dan
-    // goresan vertikal tidak lagi menggeser halaman secara tak sengaja.
-    //
-    // Ukuran diambil dari viewport scrollable asli (angka ground truth):
-    // chrome di atas/bawah (header, footer, SafeArea) sudah termasuk di
-    // dalamnya dan tidak perlu ditebak — tebakan chrome pernah meleset
-    // karena SafeArea mengosongkan padding/viewPadding untuk keturunannya.
     final media = MediaQuery.of(context);
-    // Fallback bila tidak ada scrollable ancestor (pemakaian lain):
-    // perkiraan kasar dari tinggi layar dikurangi chrome yang diketahui.
-    const headerH = 65.0; // KuisHeader 64 + border bawah
-    const footerH = 84.0; // tombol Periksa + padding footer parent (overestimate)
-    const parentPaddingV = 44.0; // padding vertikal scroll parent (20 + 24)
+    const headerH = 65.0;
+    const footerH = 84.0;
+    const parentPaddingV = 44.0;
     double available = (media.size.height -
             media.viewPadding.top -
             headerH -
             footerH -
             parentPaddingV)
-        .clamp(350.0, 860.0);
+        .clamp(480.0, 920.0);
 
     final scrollable = Scrollable.maybeOf(context);
     if (scrollable != null) {
       final sv = context.findAncestorWidgetOfExactType<SingleChildScrollView>();
       if (sv != null) {
-        // viewportDimension null-check crash sebelum layout pertama.
-        final extent =
-            scrollable.position.hasViewportDimension ? scrollable.position.viewportDimension : 0.0;
+        final extent = scrollable.position.hasViewportDimension
+            ? scrollable.position.viewportDimension
+            : 0.0;
         if (extent > 0) {
-          // Padding scrollable diterapkan di dalam viewport, jadi ruang anak
-          // = viewport − padding vertikal. Clamp menjaga ≤ viewport.
           final padV = (sv.padding ?? EdgeInsets.zero).vertical;
-          available = (extent - padV).clamp(350.0, 860.0);
+          available = (extent - padV).clamp(480.0, 920.0);
         } else if (!_viewportMeasured) {
-          // Frame pertama: viewportDimension belum terisi saat build.
-          // Ukur ulang setelah layout pertama supaya tidak tersangkut.
           _viewportMeasured = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _viewportMeasured = false;
@@ -470,43 +850,101 @@ class _TracingViewState extends State<TracingView>
 
     return SizedBox(
       height: available,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        clipBehavior: Clip.none,
         children: [
-          _infoCard(),
-          const SizedBox(height: 12),
-          Expanded(child: _canvasCard()),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _infoCard(),
+              const SizedBox(height: 10),
+              Expanded(child: _canvasCard()),
+            ],
+          ),
+          if (_statusMessage != null)
+            Positioned(
+              top: 56,
+              child: IgnorePointer(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _statusIsError
+                        ? const Color(0xCCDC2626)
+                        : const Color(0xCC059669),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.70),
+                      width: 1.2,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _statusIsError ? Symbols.warning : Symbols.check_circle,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _statusMessage!,
+                        style: AppFonts.manrope(
+                          size: 12,
+                          weight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  /// Ringkasan soal satu baris (aksara, latin, petunjuk) — padatan dari
-  /// header lama agar kanvas mengambil sisa ruang maksimal.
+  /// Header petunjuk & audio (warna disesuaikan dengan AppColors.primary proyek).
   Widget _infoCard() {
     final latin = widget.soal.soalLatin ?? '';
     final sub = [
       if (latin.isNotEmpty) 'Latin: $latin',
       widget.soal.petunjuk,
     ].join('  •  ');
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.gray100),
+        border: Border.all(color: AppColors.gray200),
         boxShadow: const [
-          BoxShadow(color: Color(0x0D000000), offset: Offset(0, 1), blurRadius: 2),
+          BoxShadow(color: Color(0x0A000000), offset: Offset(0, 2), blurRadius: 4),
         ],
       ),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: AppColors.primaryFixed,
+              color: AppColors.primaryFixed.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primary600.withValues(alpha: 0.25),
+              ),
             ),
             alignment: Alignment.center,
             child: Text(
@@ -514,196 +952,198 @@ class _TracingViewState extends State<TracingView>
               style: AppFonts.javanese(size: 24, color: AppColors.primary700),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'LATIHAN MENULIS AKSARA (FR-22 TRACING)',
-                  style: AppFonts.manrope(
+                  'TELUSURI AKSARA',
+                  style: AppFonts.epilogue(
                     size: 11,
                     weight: FontWeight.w800,
-                    color: AppColors.primary600,
-                    letterSpacing: 1.2,
+                    color: AppColors.primary600, // Warna primary proyek
+                    letterSpacing: 1.1,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   sub,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppFonts.manrope(size: 12, color: AppColors.gray500),
                 ),
               ],
             ),
           ),
+          if (widget.onTts != null) ...[
+            const SizedBox(width: 8),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.onTts,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryFixed.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppColors.primary600.withValues(alpha: 0.30),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Symbols.volume_up,
+                        size: 16,
+                        color: AppColors.primary600, // Warna primary proyek
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Bunyi',
+                        style: AppFonts.manrope(
+                          size: 12,
+                          weight: FontWeight.w700,
+                          color: AppColors.primary700, // Warna primary proyek
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  /// Kartu kanvas: mengisi sisa ruang yang tersedia (Expanded), kanvas
-  /// fleksibel mengikuti sisa, tombol aksi tetap terlihat di bawah.
+  /// Kartu Kanvas Tracing (Bersih dan Luas).
   Widget _canvasCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.gray100),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.gray200),
         boxShadow: const [
-          BoxShadow(color: Color(0x0D000000), offset: Offset(0, 1), blurRadius: 2),
+          BoxShadow(color: Color(0x0A000000), offset: Offset(0, 2), blurRadius: 4),
         ],
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryFixed,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Symbols.draw, color: AppColors.primary700),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Kanvas Tracing Aksara', style: AppFonts.epilogue(size: 17, weight: FontWeight.w800)),
-                    Text(
-                      'Telusuri garis putus-putus mengikuti bentuk aksara',
-                      style: AppFonts.manrope(size: 12, color: AppColors.gray500),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _status.contains('Berhasil')
-                      ? const Color(0xFF22C55E).withValues(alpha: 0.15)
-                      : AppColors.primaryFixed.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _status,
-                  style: AppFonts.manrope(
-                    size: 12,
-                    weight: FontWeight.w800,
-                    color: _status.contains('Berhasil')
-                        ? const Color(0xFF16A34A)
-                        : AppColors.primary700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                _canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
+                final size = Size(constraints.maxWidth, constraints.maxHeight);
+                _updateCanvasSize(size);
+
                 return ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF14352A),
+                      color: const Color(0xFF14352A), // Latar kanvas chalkboard tetap hijau
                       border: Border.all(
-                        color: AppColors.primary400.withValues(alpha: 0.3),
-                        width: 2,
+                        color: _statusIsError
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.70)
+                            : const Color(0xFF10B981).withValues(alpha: 0.35),
+                        width: _statusIsError ? 2.0 : 1.5,
                       ),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: GestureDetector(
-                      onPanStart: (d) {
-                        if (_locked) return;
-                        setState(() {
-                          _current = [d.localPosition];
-                          _strokes.add(_current!);
-                        });
-                      },
-                      onPanUpdate: (d) {
-                        if (_locked) return;
-                        setState(() {
-                          _current?.add(d.localPosition);
-                        });
-                        _push();
-                      },
-                      onPanEnd: (_) {
-                        if (_locked) return;
-                        _current = null;
-                        _push();
-                      },
-                      child: AnimatedBuilder(
-                        animation: _expand,
-                        builder: (context, _) => CustomPaint(
-                          painter: _TracingPainter(
-                            strokes: _strokes,
-                            guide: widget.soal.aksara,
-                            t: _expand.value,
-                            ideal: _idealNormalized(),
-                            success: _success,
-                          ),
-                          child: const SizedBox.expand(),
+                    child: RawGestureDetector(
+                      gestures: {
+                        EagerGestureRecognizer:
+                            GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
+                          () => EagerGestureRecognizer(),
+                          (instance) {},
                         ),
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: _onPointerDown,
+                        onPointerMove: _onPointerMove,
+                        onPointerUp: _onPointerUp,
+                        onPointerCancel: _onPointerCancel,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            AnimatedBuilder(
+                              animation: Listenable.merge([_expand, _fillAnimation]),
+                              builder: (context, _) => CustomPaint(
+                                painter: _TracingPainter(
+                                  strokes: _strokes,
+                                guideCache: _guideCache,
+                                guide: widget.soal.aksara,
+                                fillProgress: _fillAnimation.value,
+                                t: _expand.value,
+                                success: _success,
+                              ),
+                              child: const SizedBox.expand(),
+                            ),
+                          ),
+                          if (!_fontReady && _guideCache == null)
+                            Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(
+                                    width: 32,
+                                    height: 32,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.8,
+                                      color: Color(0xFF34D399),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Nyiyapake aksara...',
+                                    style: AppFonts.manrope(
+                                      size: 12,
+                                      weight: FontWeight.w600,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _locked ? null : _reset,
-                  icon: const Icon(Symbols.refresh, size: 18, color: AppColors.primary600),
-                  label: Text('Hapus Goresan', style: AppFonts.manrope(size: 13, weight: FontWeight.w700)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.gray200),
-                    foregroundColor: AppColors.onSurface,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _locked ? null : _snap,
-                  icon: const Icon(Symbols.auto_fix_high, size: 18),
-                  label: Text('Rapikan Goresan', style: AppFonts.manrope(size: 13, weight: FontWeight.w800)),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryFixed,
-                    foregroundColor: AppColors.primary700,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
-            ],
+              );
+            },
           ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.gray100),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _locked ? null : _reset,
+            icon: const Icon(Symbols.refresh, size: 18, color: AppColors.primary600),
+            label: Text(
+              'Hapus Ulang',
+              style: AppFonts.manrope(
+                size: 13,
+                weight: FontWeight.w700,
+                color: AppColors.onSurface,
+              ),
             ),
-            child: Text(
-              'Telusuri bentuk aksara nganti ketemu. Yen kurang mirip, kanvas bakal mbaleni otomatis.',
-              textAlign: TextAlign.center,
-              style: AppFonts.manrope(size: 13, color: AppColors.gray500),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.gray200),
+              foregroundColor: AppColors.onSurface,
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
+        ),
         ],
       ),
     );
@@ -713,184 +1153,138 @@ class _TracingViewState extends State<TracingView>
 class _TracingPainter extends CustomPainter {
   _TracingPainter({
     required this.strokes,
+    required this.guideCache,
     required this.guide,
+    required this.fillProgress,
     required this.t,
-    required this.ideal,
     required this.success,
   });
 
   final List<List<Offset>> strokes;
+  final GuideRenderCache? guideCache;
   final String guide;
 
-  /// Progres animasi "mengembang" (0 = goresan asli, 1 = memenuhi panduan).
+  /// Progres blok warna penuh aksara (0 = sketsa panduan, 1 = blok penuh hijau #34D399)
+  final double fillProgress;
+
+  /// Progres animasi sukses (0 = normal, 1 = selesai dinilai benar)
   final double t;
 
-  /// Goresan ideal ternormalisasi 0..1 (dari Soal.paths); kosong = fallback glif.
-  final List<List<Offset>> ideal;
-
-  /// True saat jawaban dinilai benar: crossfade ke bentuk sempurna.
+  /// True saat jawaban dinilai benar.
   final bool success;
 
   @override
   void paint(Canvas canvas, Size canvasSize) {
-    GuideGeometry? geom;
-    if (guide.isNotEmpty) {
-      geom = guideGeometryFor(canvasSize, guide);
-      final tp = TextPainter(
-        text: TextSpan(
-          text: guide,
-          style: _guideStyle(
-            geom.fontSize,
-            Colors.white.withValues(alpha: 0.22),
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, geom.paintOffset);
+    // 0. Grid papan tulis (32px step) menyamai kanvas Web (aksara-tracing-canvas.js)
+    final gridPaint = Paint()
+      ..color = const Color(0x0FFFFFFF) // rgba(255, 255, 255, 0.06)
+      ..strokeWidth = 1.0;
+    const step = 32.0;
+    for (var x = step; x < canvasSize.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, canvasSize.height), gridPaint);
     }
-    final guideRect = geom?.ink;
+    for (var y = step; y < canvasSize.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(canvasSize.width, y), gridPaint);
+    }
 
-    final userOp = success ? (1.0 - t) : 1.0;
-    if (strokes.isNotEmpty && !(success && t >= 1.0)) {
-      final guidePaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.25 * userOp)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-
-      final strokePaint = Paint()
-        ..color = const Color(0xFFF6D98B).withValues(alpha: 1.0 * userOp)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-
-      final strokeBounds = _boundsOf(strokes);
-      final transform = _expandTransform(strokeBounds, guideRect, t);
-
+    if (guideCache != null) {
       canvas.save();
-      if (transform != null) {
-        canvas.translate(transform.center.dx, transform.center.dy);
-        canvas.scale(transform.scale);
-        canvas.translate(-transform.anchor.dx, -transform.anchor.dy);
+      // Melebarkan bentuk aksara secara horizontal & vertikal ke atas dari titik tengah kanvas
+      canvas.translate(guideCache!.ink.center.dx, guideCache!.ink.center.dy);
+      canvas.scale(guideCache!.widthStretch, guideCache!.heightStretch);
+      canvas.translate(-guideCache!.ink.center.dx, -guideCache!.ink.center.dy);
+
+      // 1. Sketsa fill panduan awal lembut (badan aksara jelas terlihat jalurnya)
+      if (fillProgress < 1.0) {
+        guideCache!.sketchFillPainter.paint(canvas, guideCache!.paintOffset);
       }
 
+      // 2. Blok bentuk aksara penuh dengan warna hijau yang sama dengan garis user (#34D399)
+      if (fillProgress > 0.0) {
+        if (fillProgress >= 1.0) {
+          guideCache!.solidBlockPainter.paint(canvas, guideCache!.paintOffset);
+        } else {
+          final bounds = guideCache!.ink.inflate(40);
+          canvas.saveLayer(
+            bounds,
+            Paint()..color = Colors.white.withValues(alpha: fillProgress),
+          );
+          guideCache!.solidBlockPainter.paint(canvas, guideCache!.paintOffset);
+          canvas.restore();
+        }
+      }
+
+      canvas.restore();
+    }
+
+    // 3. Goresan Siswa (Tebal & empuk 5.5px sesuai lebar jalur sketsa, tanpa garis hitam)
+    if (strokes.isNotEmpty) {
+      final strokePaint = Paint()
+        ..color = const Color(0xFF34D399)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5.5
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      final dotPaint = Paint()
+        ..color = const Color(0xFF34D399)
+        ..style = PaintingStyle.fill;
+
       for (final s in strokes) {
-        if (s.length < 2) continue;
+        if (s.isEmpty) continue;
+        if (s.length == 1) {
+          canvas.drawCircle(s.first, strokePaint.strokeWidth / 2, dotPaint);
+          continue;
+        }
         final path = Path()..moveTo(s.first.dx, s.first.dy);
         for (var i = 1; i < s.length; i++) {
           path.lineTo(s[i].dx, s[i].dy);
         }
-        canvas.drawPath(path, guidePaint);
         canvas.drawPath(path, strokePaint);
       }
+    }
+
+    // 4. GARIS PUTIH FRAME SKETSA TETAP BERTAHAN (Tebal 3.8px membingkai jalur aksara)
+    if (guideCache != null) {
+      canvas.save();
+      canvas.translate(guideCache!.ink.center.dx, guideCache!.ink.center.dy);
+      canvas.scale(guideCache!.widthStretch, guideCache!.heightStretch);
+      canvas.translate(-guideCache!.ink.center.dx, -guideCache!.ink.center.dy);
+
+      guideCache!.sketchStrokePainter.paint(canvas, guideCache!.paintOffset);
 
       canvas.restore();
     }
 
-    if (success && t > 0 && guideRect != null) {
+    // 5. Efek Transisi Sukses Sempurna
+    if (success && t > 0 && guideCache != null) {
       final idealOp = t;
       canvas.save();
-      canvas.translate(guideRect.center.dx, guideRect.center.dy);
-      canvas.scale(0.7 + 0.3 * t);
-      canvas.translate(-guideRect.center.dx, -guideRect.center.dy);
-      if (ideal.isNotEmpty) {
-        final halo = Paint()
-          ..color = Colors.white.withValues(alpha: 0.25 * idealOp)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 10
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round;
-        final core = Paint()
-          ..color = const Color(0xFFF6D98B).withValues(alpha: idealOp)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 7
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round;
-        for (final stroke in ideal) {
-          if (stroke.length < 2) continue;
-          final path = Path()
-            ..moveTo(
-              guideRect.left + stroke.first.dx * guideRect.width,
-              guideRect.top + stroke.first.dy * guideRect.height,
-            );
-          for (var i = 1; i < stroke.length; i++) {
-            path.lineTo(
-              guideRect.left + stroke[i].dx * guideRect.width,
-              guideRect.top + stroke[i].dy * guideRect.height,
-            );
-          }
-          canvas.drawPath(path, halo);
-          canvas.drawPath(path, core);
-        }
-      } else if (geom != null) {
-        final tp = TextPainter(
-          text: TextSpan(
-            text: guide,
-            style: _guideStyle(
-              geom.fontSize,
-              const Color(0xFFF6D98B).withValues(alpha: idealOp),
-            ),
+      canvas.translate(guideCache!.ink.center.dx, guideCache!.ink.center.dy);
+      canvas.scale(
+        guideCache!.widthStretch * (0.96 + 0.04 * t),
+        guideCache!.heightStretch * (0.96 + 0.04 * t),
+      );
+      canvas.translate(-guideCache!.ink.center.dx, -guideCache!.ink.center.dy);
+
+      final glowPainter = TextPainter(
+        text: TextSpan(
+          text: guide,
+          style: _guideStyle(
+            guideCache!.fontSize,
+            const Color(0xFF34D399).withValues(alpha: idealOp),
+            weight: FontWeight.w700,
           ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(canvas, geom.paintOffset);
-      }
+        ),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+      )..layout();
+      glowPainter.paint(canvas, guideCache!.paintOffset);
+
       canvas.restore();
     }
   }
 
-  Rect? _boundsOf(List<List<Offset>> strokes) {
-    Rect? bounds;
-    for (final s in strokes) {
-      for (final p in s) {
-        final r = Rect.fromCenter(center: p, width: 0, height: 0);
-        bounds = bounds == null ? r : bounds.expandToInclude(r);
-      }
-    }
-    return bounds;
-  }
-
-  _ExpandTransform? _expandTransform(Rect? strokeBounds, Rect? guideRect, double t) {
-    if (strokeBounds == null || guideRect == null) return null;
-    if (strokeBounds.width <= 0 || strokeBounds.height <= 0) return null;
-    if (guideRect.width <= 0 || guideRect.height <= 0) return null;
-
-    final targetScale = (guideRect.width / strokeBounds.width)
-        .clamp(0.0, double.infinity)
-        .toDouble();
-    final targetScaleH = guideRect.height / strokeBounds.height;
-    final fitScale = targetScale < targetScaleH ? targetScale : targetScaleH;
-
-    final anchor = strokeBounds.center;
-    final target = guideRect.center;
-    return _ExpandTransform(
-      scale: _lerp(1.0, fitScale, t),
-      anchor: anchor,
-      center: Offset(_lerp(anchor.dx, target.dx, t), _lerp(anchor.dy, target.dy, t)),
-    );
-  }
-
-  double _lerp(double a, double b, double t) => a + (b - a) * t;
-
   @override
-  bool shouldRepaint(covariant _TracingPainter oldDelegate) =>
-      oldDelegate.t != t ||
-      oldDelegate.strokes != strokes ||
-      oldDelegate.guide != guide ||
-      oldDelegate.success != success ||
-      oldDelegate.ideal != ideal;
-}
-
-class _ExpandTransform {
-  const _ExpandTransform({
-    required this.scale,
-    required this.anchor,
-    required this.center,
-  });
-
-  final double scale;
-  final Offset anchor;
-  final Offset center;
+  bool shouldRepaint(covariant _TracingPainter oldDelegate) => true;
 }
