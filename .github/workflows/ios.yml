@@ -1,0 +1,55 @@
+name: Build iOS IPA (No-Codesign)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.47.6'
+  SJ_BASE_URL: 'https://sinau-app.my.id/api'
+  SJ_GOOGLE_SERVER_CLIENT_ID: '915311225235-hkpo6fcudhk8gq6dqg4dtd7lb51amr03.apps.googleusercontent.com'
+
+jobs:
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS app (no codesign)
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=SJ_BASE_URL="${SJ_BASE_URL}" \
+            --dart-define=SJ_GOOGLE_SERVER_CLIENT_ID="${SJ_GOOGLE_SERVER_CLIENT_ID}"
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r -y app.ipa Payload
+          ls -lh app.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-ipa
+          path: app.ipa
+          retention-days: 7
+          if-no-files-found: error
