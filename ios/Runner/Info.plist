@@ -56,6 +56,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>GIDClientID</key>
+	<string>915311225235-ul669j38pu7nf2gkgip3s82la3hdlk70.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -63,7 +65,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.915311225235-hkpo6fcudhk8gq6dqg4dtd7lb51amr03</string>
+				<string>com.googleusercontent.apps.915311225235-ul669j38pu7nf2gkgip3s82la3hdlk70</string>
 			</array>
 		</dict>
 	</array>

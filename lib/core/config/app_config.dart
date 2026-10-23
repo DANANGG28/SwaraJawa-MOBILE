@@ -25,8 +25,11 @@ class AppConfig {
   ///
   /// Isi saat build iOS:
   ///   flutter build ios --dart-define=SJ_GOOGLE_IOS_CLIENT_ID=xxxx.apps.googleusercontent.com
-  static const String googleIosClientId =
-      String.fromEnvironment('SJ_GOOGLE_IOS_CLIENT_ID');
+  static const String googleIosClientId = String.fromEnvironment(
+    'SJ_GOOGLE_IOS_CLIENT_ID',
+    defaultValue:
+        '915311225235-ul669j38pu7nf2gkgip3s82la3hdlk70.apps.googleusercontent.com',
+  );
 
   /// Apakah login Google sudah dikonfigurasi (client ID tersedia).
   static bool get isGoogleSignInConfigured {
