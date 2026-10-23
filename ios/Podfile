@@ -46,5 +46,6 @@ post_install do |installer|
         'PERMISSION_PHOTOS=1',
         'PERMISSION_CAMERA=1',
       ]
+    end
   end
 end
