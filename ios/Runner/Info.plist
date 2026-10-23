@@ -49,5 +49,23 @@
 	<string>Aplikasi membutuhkan izin mikrofon untuk latihan pengucapan bahasa Jawa dan kuis suara.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Aplikasi membutuhkan izin akses galeri foto untuk memilih foto profil.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Aplikasi membutuhkan izin kamera untuk mengambil foto profil secara langsung.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.915311225235-hkpo6fcudhk8gq6dqg4dtd7lb51amr03</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

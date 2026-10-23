@@ -21,8 +21,20 @@ class AppConfig {
   static const String googleServerClientId =
       String.fromEnvironment('SJ_GOOGLE_SERVER_CLIENT_ID');
 
+  /// Google OAuth iOS client ID.
+  ///
+  /// Isi saat build iOS:
+  ///   flutter build ios --dart-define=SJ_GOOGLE_IOS_CLIENT_ID=xxxx.apps.googleusercontent.com
+  static const String googleIosClientId =
+      String.fromEnvironment('SJ_GOOGLE_IOS_CLIENT_ID');
+
   /// Apakah login Google sudah dikonfigurasi (client ID tersedia).
-  static bool get isGoogleSignInConfigured => googleServerClientId.isNotEmpty;
+  static bool get isGoogleSignInConfigured {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      return googleIosClientId.isNotEmpty || googleServerClientId.isNotEmpty;
+    }
+    return googleServerClientId.isNotEmpty;
+  }
 
   /// Base URL backend.
   ///
