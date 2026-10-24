@@ -66,6 +66,28 @@ class TtsPlayback {
     }
   }
 
+  /// Putar langsung dari in-memory audioBase64 (zero-roundtrip), fallback ke URL.
+  static Future<bool> playBase64OrUrl(
+    AudioPlayer player, {
+    String? audioBase64,
+    String? audioUrl,
+    String mimeType = 'audio/mpeg',
+  }) async {
+    final bytes = _decode(audioBase64);
+    if (bytes != null && bytes.isNotEmpty) {
+      try {
+        await player.stop();
+        await player.play(BytesSource(bytes, mimeType: mimeType));
+        return true;
+      } catch (e, s) {
+        debugPrint('[TTS] gagal memutar in-memory audio_base64: $e');
+        debugPrintStack(stackTrace: s);
+      }
+    }
+
+    return playUrl(player, audioUrl);
+  }
+
   static Uint8List? _decode(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     try {

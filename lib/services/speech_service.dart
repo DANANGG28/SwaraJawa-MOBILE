@@ -6,6 +6,7 @@ import '../core/network/audio_bytes_stub.dart'
     if (dart.library.io) '../core/network/audio_bytes_io.dart'
     if (dart.library.html) '../core/network/audio_bytes_web.dart' as audio_bytes;
 import '../models/quiz_result.dart';
+import '../models/voice_tutor.dart';
 
 class SpeechService {
   SpeechService(this._client);
@@ -86,6 +87,30 @@ class SpeechService {
     });
     final data = await _client.postMultipart('/soal/$soalId/latihan-ngomong', formData: form);
     return LatihanNgomongResult.fromJson(data);
+  }
+
+  /// Interaksi Voice Tutor percakapan dua arah ala GoPrep.gg Preppy AI.
+  Future<VoiceTutorResult> interactVoiceTutor({
+    required String audioPath,
+    List<Map<String, String>>? history,
+    String? contextMode,
+    String? mockTranscript,
+    bool demo = false,
+  }) async {
+    final form = FormData.fromMap({
+      'audio': demo
+          ? 'demo'
+          : MultipartFile.fromBytes(
+              await audio_bytes.readAudioBytes(audioPath),
+              filename: _recordFilename,
+              contentType: _recordContentType,
+            ),
+      if (mockTranscript != null) 'mock_transcript': mockTranscript,
+      if (history != null) 'history': history,
+      if (contextMode != null) 'context_mode': contextMode,
+    });
+    final data = await _client.postMultipart('/voice-tutor/interact', formData: form);
+    return VoiceTutorResult.fromJson(data);
   }
 
   Future<String> audioBase64FromPath(String path) => audio_bytes.audioBase64(path);

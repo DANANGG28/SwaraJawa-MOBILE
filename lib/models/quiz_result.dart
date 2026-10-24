@@ -87,6 +87,7 @@ class KuisSuaraResult {
     this.mock = false,
     this.teksRespons,
     this.audioUrl,
+    this.audioBase64,
     this.skorTertinggi = 0,
     this.expDidapat = 0,
     this.rewardExp = 0,
@@ -103,6 +104,7 @@ class KuisSuaraResult {
   final bool mock;
   final String? teksRespons;
   final String? audioUrl;
+  final String? audioBase64;
   final int skorTertinggi;
   final int expDidapat;
   final int rewardExp;
@@ -120,6 +122,7 @@ class KuisSuaraResult {
       mock: json['mock'] == true,
       teksRespons: json['teks_respons']?.toString(),
       audioUrl: json['audio_url']?.toString(),
+      audioBase64: json['audio_base64']?.toString(),
       skorTertinggi: asInt(json['skor_tertinggi']),
       expDidapat: asInt(json['exp_didapat']),
       rewardExp: asInt(json['reward_exp']),
@@ -136,19 +139,26 @@ class LatihanNgomongResult {
     required this.transkripsi,
     this.feedbackText,
     this.audioUrl,
+    this.audioBase64,
+    this.expression = 'happy',
     this.mock = false,
   });
 
   final String transkripsi;
   final String? feedbackText;
   final String? audioUrl;
+  final String? audioBase64;
+  final String expression;
   final bool mock;
+
 
   factory LatihanNgomongResult.fromJson(Map<String, dynamic> json) {
     return LatihanNgomongResult(
       transkripsi: (json['transkripsi'] ?? '').toString(),
       feedbackText: json['feedback_text']?.toString(),
       audioUrl: json['audio_url']?.toString(),
+      audioBase64: json['audio_base64']?.toString(),
+      expression: (json['expression'] ?? 'happy').toString(),
       mock: json['mock'] == true,
     );
   }
