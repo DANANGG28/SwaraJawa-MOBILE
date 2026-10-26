@@ -13,6 +13,7 @@ import '../../models/level_materi.dart';
 import '../../models/topik.dart';
 import '../../state/app_state.dart';
 import '../../widgets/bottom_nav.dart';
+import '../../widgets/streak_modal.dart';
 import '../profile/edit_profile_screen.dart';
 import '../quiz/quiz_session_screen.dart';
 import 'topik_list_screen.dart';
@@ -147,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     bg: const Color(0xFFFFF7ED),
                     border: const Color(0xFFFED7AA),
                     value: '${siswa?.currentStreak ?? 0}',
+                    onTap: _bukaStreakModal,
                   ),
                   const SizedBox(width: 8),
                   _pill(
@@ -368,14 +370,51 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _bukaStreakModal() {
+    final state = context.read<AppState>();
+    showStreakModal(
+      context,
+      siswa: state.siswa,
+      onContinue: _lanjutkanBelajar,
+    );
+  }
+
+  void _lanjutkanBelajar() {
+    final units = _detail?.units ?? const <LevelMateri>[];
+    final profilKurang = context.read<AppState>().siswa?.profilBelumLengkap == true;
+    for (final unit in units) {
+      if (unit.terkunci) continue;
+      if (unit.adaBagian) {
+        for (final b in unit.pembahasan) {
+          if (!b.selesai) {
+            _bukaBagian(unit, b, profilKurang);
+            return;
+          }
+        }
+      } else if (!unit.selesai) {
+        _bukaBagian(unit, null, profilKurang);
+        return;
+      }
+    }
+    // Fallback: buka unit pertama yang tidak terkunci
+    final firstUnit = units.where((u) => !u.terkunci).firstOrNull;
+    if (firstUnit != null) {
+      final firstBagian = firstUnit.adaBagian
+          ? firstUnit.pembahasan.where((b) => !b.terkunci).firstOrNull
+          : null;
+      _bukaBagian(firstUnit, firstBagian, profilKurang);
+    }
+  }
+
   Widget _pill({
     required IconData icon,
     required Color color,
     required Color bg,
     required Color border,
     required String value,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
@@ -392,6 +431,17 @@ class _HomeScreenState extends State<HomeScreen> {
             style: AppFonts.nunito(size: 12, weight: FontWeight.w900, color: color),
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) return content;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: content,
       ),
     );
   }
