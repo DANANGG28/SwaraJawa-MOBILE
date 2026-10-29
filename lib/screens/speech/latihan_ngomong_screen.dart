@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -12,15 +14,9 @@ import '../../core/audio/tts_playback.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
-import '../../models/soal.dart';
 import '../../models/voice_tutor.dart';
 import '../../state/app_state.dart';
 import '../../widgets/preppy_pill_avatar.dart';
-
-enum VoiceRoomMode {
-  voiceTutor, // Percakapan bebas dua arah dengan Si Swara (GoPrep style)
-  quizSoal,   // Latihan pengucapan kalimat kuis materi kurikulum
-}
 
 class ChatTurn {
   final bool isUser;
@@ -50,35 +46,39 @@ class LatihanNgomongScreen extends StatefulWidget {
 class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
   final AudioRecorder _recorder = AudioRecorder();
   final AudioPlayer _player = AudioPlayer();
+  final TextEditingController _textController = TextEditingController();
 
-  // Mode ruangan
-  final VoiceRoomMode _currentMode = VoiceRoomMode.voiceTutor;
-
-  // State percakapan
+  // Riwayat percakapan & kosakata
   final List<ChatTurn> _history = [];
   final List<VoiceTutorVocabulary> _accumulatedVocab = [];
 
-  // Data kuis acuan jika mode kuis
-  Soal? _soal;
   // Status perekaman & AI
   bool _recording = false;
   bool _processing = false;
   bool _aiSpeaking = false;
+  bool _isHolding = false;
+  DateTime? _pressStartTime;
   double _audioLevel = 0.0;
   StreamSubscription<Amplitude>? _amplitudeSub;
 
-  // Mood maskot Si Swara
+  // Subtitle AI saat ini (seperti wadah subtitle di web)
+  String? _currentAiSubtitle;
+  Map<String, String?> _lastSpokenAudio = {'base64': null, 'url': null};
+
+  // Tantangan pengulangan lafal terkini
+  String? _activeRepeatChallenge;
+
+  // Mood & tatapan maskot Si Swara
   PillMood _mascotMood = PillMood.happy;
   Offset? _touchOffset;
 
   // Pengaturan interaksi
-  bool _handsFree = true;
+  bool _handsFree = false; // Mode pencet & tahan adalah interaksi utama
   double _playbackSpeed = 1.0;
   DateTime _lastSpeechTime = DateTime.now();
-  Timer? _silenceTimer;
 
-  // Kalimat tantangan peniruan terkini
-  String? _activeRepeatChallenge;
+  // Mode alternatif ketik teks
+  bool _showTextInput = false;
 
   @override
   void initState() {
@@ -96,10 +96,10 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
         _mascotMood = PillMood.happy;
       });
 
-      // Jika mode hands-free aktif, otomatis dengarkan respon siswa
-      if (_handsFree && !_recording && !_processing) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (mounted && !_aiSpeaking && !_recording) {
+      // Jika mode hands-free aktif, otomatis dengarkan respon siswa setelah AI selesai bicara
+      if (_handsFree && !_recording && !_processing && !_isHolding) {
+        Future.delayed(const Duration(milliseconds: 450), () {
+          if (mounted && !_aiSpeaking && !_recording && !_isHolding) {
             _startRecording();
           }
         });
@@ -108,25 +108,40 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
   }
 
   void _loadInitialGreeting() {
+    const greetingText =
+        'Sugeng rawuh! Kula Si Swara, kanca sinau panjenengan. Mangga wicara Basa Jawa utawa takon apa wae!';
+    const repeatTarget = 'Sugeng enjang, Mas Swara';
+    final initialVocab = [
+      const VoiceTutorVocabulary(
+        word: 'Sugeng rawuh',
+        meaning: 'Selamat datang',
+        level: 'Krama',
+      ),
+      const VoiceTutorVocabulary(
+        word: 'Kanca',
+        meaning: 'Teman / Kawan',
+        level: 'Ngoko',
+      ),
+    ];
+
     _history.add(ChatTurn(
       isUser: false,
-      text: 'Sugeng rawuh! Kula Si Swara, kanca sinau panjenengan. Mangga wicara Basa Jawa utawa takon apa wae!',
-      suggestedRepeat: 'Sugeng enjang, Mas Swara',
-      vocabulary: [
-        const VoiceTutorVocabulary(word: 'Sugeng rawuh', meaning: 'Selamat datang', level: 'Krama'),
-        const VoiceTutorVocabulary(word: 'Kanca', meaning: 'Teman / Kawan', level: 'Ngoko'),
-      ],
+      text: greetingText,
+      suggestedRepeat: repeatTarget,
+      vocabulary: initialVocab,
     ));
-    _activeRepeatChallenge = 'Sugeng enjang, Mas Swara';
-    _accumulatedVocab.addAll(_history.first.vocabulary);
+
+    _currentAiSubtitle = greetingText;
+    _activeRepeatChallenge = repeatTarget;
+    _accumulatedVocab.addAll(initialVocab);
   }
 
   @override
   void dispose() {
-    _silenceTimer?.cancel();
     _amplitudeSub?.cancel();
     _recorder.dispose();
     _player.dispose();
+    _textController.dispose();
     super.dispose();
   }
 
@@ -134,12 +149,78 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
       ? const RecordConfig(encoder: AudioEncoder.opus)
       : const RecordConfig(encoder: AudioEncoder.aacLc);
 
+  // 1. Interaksi Pencet & Tahan Animasi untuk Merekam
+  Future<void> _handlePointerDown() async {
+    if (_processing) return;
+
+    // Jika AI sedang berbicara, potong audio agar user bisa langsung berbicara
+    if (_aiSpeaking) {
+      await _player.stop();
+      if (!mounted) return;
+      setState(() {
+        _aiSpeaking = false;
+      });
+    }
+
+    _isHolding = true;
+    _pressStartTime = DateTime.now();
+    HapticFeedback.heavyImpact();
+
+    // Sesuai versi website: saat tombol mic/animasi ditekan, subtitle sebelumnya langsung menghilang
+    setState(() {
+      _currentAiSubtitle = null;
+    });
+
+    await _startRecording();
+  }
+
+  Future<void> _handlePointerUp() async {
+    if (!_isHolding) return;
+    _isHolding = false;
+
+    final pressDuration = _pressStartTime != null
+        ? DateTime.now().difference(_pressStartTime!)
+        : Duration.zero;
+
+    // Jika durasi terlalu singkat (< 400ms), batalkan dan beri tahu user untuk menahan
+    if (pressDuration.inMilliseconds < 400) {
+      await _abortRecording(showHint: true);
+    } else {
+      await _stopRecordingAndSend();
+    }
+  }
+
+  Future<void> _handlePointerCancel() async {
+    if (!_isHolding) return;
+    _isHolding = false;
+    await _abortRecording(showHint: false);
+  }
+
+  Future<void> _abortRecording({bool showHint = false}) async {
+    _amplitudeSub?.cancel();
+    if (_recording) {
+      try {
+        await _recorder.stop();
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _recording = false;
+      _audioLevel = 0.0;
+      _mascotMood = PillMood.happy;
+    });
+    if (showHint) {
+      _snack('Pencet lan tahan Si Swara nalika wicara.');
+    }
+  }
+
   Future<void> _startRecording() async {
-    if (_processing || _aiSpeaking || _recording) return;
+    if (_processing || _recording) return;
 
     try {
       if (!await _recorder.hasPermission()) {
         _snack('Izin mikrofon dibutuhake kanggo wicara.');
+        _isHolding = false;
         return;
       }
 
@@ -151,31 +232,48 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
 
       await _recorder.start(_recordConfig(), path: path);
 
+      // Pastikan user belum melepas pointer sebelum recorder mulai
+      if (!_isHolding && !_handsFree) {
+        try {
+          await _recorder.stop();
+        } catch (_) {}
+        return;
+      }
+
+      if (!mounted) return;
       setState(() {
         _recording = true;
         _mascotMood = PillMood.neutral;
         _lastSpeechTime = DateTime.now();
       });
 
-      // Monitor amplitudo & Fast VAD (500ms hening auto-stop)
       _amplitudeSub?.cancel();
-      _amplitudeSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((amp) {
+      _amplitudeSub = _recorder
+          .onAmplitudeChanged(const Duration(milliseconds: 100))
+          .listen((amp) {
         if (!mounted) return;
         final currentDb = amp.current;
         final normalized = ((currentDb + 45.0) / 45.0).clamp(0.0, 1.0);
 
         setState(() => _audioLevel = normalized);
 
-        // Jika suara di atas batas -36dB, perbarui waktu bicara
         if (currentDb > -36.0) {
           _lastSpeechTime = DateTime.now();
-        } else if (_handsFree && DateTime.now().difference(_lastSpeechTime).inMilliseconds >= 550) {
-          // Diam 550ms -> otomatis kirim suara
+        } else if (_handsFree &&
+            !_isHolding &&
+            DateTime.now().difference(_lastSpeechTime).inMilliseconds >= 550) {
+          // Hanya auto-stop diam jika Hands-Free aktif dan tidak sedang ditahan manual
           _stopRecordingAndSend();
         }
       });
     } catch (_) {
-      _snack('Gagal miwiti mikrofon.');
+      if (mounted) {
+        setState(() {
+          _recording = false;
+          _isHolding = false;
+        });
+        _snack('Gagal miwiti mikrofon.');
+      }
     }
   }
 
@@ -188,6 +286,7 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
       path = await _recorder.stop();
     } catch (_) {}
 
+    if (!mounted) return;
     setState(() {
       _recording = false;
       _processing = true;
@@ -195,118 +294,171 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
       _mascotMood = PillMood.thinking;
     });
 
+    HapticFeedback.lightImpact();
+
     if (path != null) {
       await _kirimAudio(path);
     } else {
       setState(() {
         _processing = false;
-        _mascotMood = PillMood.neutral;
+        _mascotMood = PillMood.happy;
       });
     }
   }
 
-  Future<void> _kirimAudio(String path) async {
+  Future<void> _kirimAudio(String path, {String? mockTranscript}) async {
     try {
       final speechService = context.read<AppState>().speech;
 
-      if (_currentMode == VoiceRoomMode.voiceTutor) {
-        // Mode Voice Tutor GoPrep Free-Form
-        final recent = _history.length > 4 ? _history.sublist(_history.length - 4) : _history;
-        final historyPayload = recent.map((h) => {
-          'role': h.isUser ? 'user' : 'assistant',
-          'content': h.text,
-        }).toList();
+      final recent = _history.length > 4 ? _history.sublist(_history.length - 4) : _history;
+      final historyPayload = recent.map((h) => {
+        'role': h.isUser ? 'user' : 'assistant',
+        'content': h.text,
+      }).toList();
 
-        final res = await speechService.interactVoiceTutor(
-          audioPath: path,
-          history: historyPayload,
-          contextMode: 'free_talk',
-        );
+      final res = await speechService.interactVoiceTutor(
+        audioPath: path,
+        history: historyPayload,
+        contextMode: 'free_talk',
+        mockTranscript: mockTranscript,
+      );
 
-        if (!mounted) return;
+      if (!mounted) return;
 
-        setState(() {
-          _history.add(ChatTurn(isUser: true, text: res.transkripsiSiswa));
+      setState(() {
+        if (res.transkripsiSiswa.isNotEmpty || mockTranscript != null) {
           _history.add(ChatTurn(
-            isUser: false,
-            text: res.balasanTeks,
-            audioBase64: res.audioBase64,
-            audioUrl: res.audioUrl,
-            suggestedRepeat: res.suggestedRepeat,
-            vocabulary: res.vocabulary,
+            isUser: true,
+            text: res.transkripsiSiswa.isNotEmpty
+                ? res.transkripsiSiswa
+                : (mockTranscript ?? ''),
           ));
-
-          _activeRepeatChallenge = res.suggestedRepeat;
-          for (final v in res.vocabulary) {
-            if (!_accumulatedVocab.any((item) => item.word.toLowerCase() == v.word.toLowerCase())) {
-              _accumulatedVocab.add(v);
-            }
-          }
-
-          _processing = false;
-          _mascotMood = _mapMood(res.expression);
-          _aiSpeaking = true;
-        });
-
-        // Putar audio langsung dari memory base64 (zero-roundtrip)
-        await _player.setPlaybackRate(_playbackSpeed);
-        await TtsPlayback.playBase64OrUrl(
-          _player,
-          audioBase64: res.audioBase64,
-          audioUrl: res.audioUrl,
-        );
-      } else {
-        // Mode Kuis Soal Kurikulum
-        final soal = _soal;
-        if (soal == null) {
-          setState(() {
-            _processing = false;
-            _mascotMood = PillMood.neutral;
-          });
-          return;
         }
 
-        final res = await speechService.latihanNgomong(
-          soal.id,
-          audioPath: path,
-        );
-
-        if (!mounted) return;
-
-        setState(() {
-          _history.add(ChatTurn(isUser: true, text: res.transkripsi));
-          _history.add(ChatTurn(
-            isUser: false,
-            text: res.feedbackText ?? 'Pangucapan panjenengan sae sanget!',
-            audioBase64: res.audioBase64,
-            audioUrl: res.audioUrl,
-          ));
-          _processing = false;
-          _mascotMood = PillMood.happy;
-          _aiSpeaking = true;
-        });
-
-        await _player.setPlaybackRate(_playbackSpeed);
-        await TtsPlayback.playBase64OrUrl(
-          _player,
+        _history.add(ChatTurn(
+          isUser: false,
+          text: res.balasanTeks,
           audioBase64: res.audioBase64,
           audioUrl: res.audioUrl,
-        );
-      }
+          suggestedRepeat: res.suggestedRepeat,
+          vocabulary: res.vocabulary,
+        ));
+
+        _currentAiSubtitle = res.balasanTeks;
+        _lastSpokenAudio = {
+          'base64': res.audioBase64,
+          'url': res.audioUrl,
+        };
+        _activeRepeatChallenge = res.suggestedRepeat;
+
+        for (final v in res.vocabulary) {
+          if (!_accumulatedVocab
+              .any((item) => item.word.toLowerCase() == v.word.toLowerCase())) {
+            _accumulatedVocab.add(v);
+          }
+        }
+
+        _processing = false;
+        _mascotMood = _mapMood(res.expression);
+        _aiSpeaking = true;
+      });
+
+      // Putar audio langsung dari memory base64 / URL
+      await _player.setPlaybackRate(_playbackSpeed);
+      await TtsPlayback.playBase64OrUrl(
+        _player,
+        audioBase64: res.audioBase64,
+        audioUrl: res.audioUrl,
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
         _processing = false;
-        _mascotMood = PillMood.sad;
+        _mascotMood = PillMood.happy;
       });
       _snack(e.message);
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _processing = false;
-        _mascotMood = PillMood.sad;
+        _mascotMood = PillMood.happy;
       });
       _snack('Gagal ngirim audio percakapan.');
+    }
+  }
+
+  Future<void> _kirimTeks() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty || _processing || _aiSpeaking) return;
+
+    _textController.clear();
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _currentAiSubtitle = null;
+      _processing = true;
+      _mascotMood = PillMood.thinking;
+    });
+
+    try {
+      String dummyPath = '';
+      if (!kIsWeb) {
+        final tempDir = await getTemporaryDirectory();
+        final dummyFile = File('${tempDir.path}/text_mock.m4a');
+        if (!await dummyFile.exists()) {
+          await dummyFile.writeAsBytes(List.filled(32, 0));
+        }
+        dummyPath = dummyFile.path;
+      } else {
+        dummyPath = 'text_mock.webm';
+      }
+
+      await _kirimAudio(dummyPath, mockTranscript: text);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _processing = false;
+          _mascotMood = PillMood.happy;
+        });
+        _snack('Gagal ngirim pitakon.');
+      }
+    }
+  }
+
+  Future<void> _replayCurrentSubtitleAudio() async {
+    final base64 = _lastSpokenAudio['base64'];
+    final url = _lastSpokenAudio['url'];
+    if (base64 == null && url == null) {
+      if (_currentAiSubtitle != null) {
+        await _playChallengeAudio(_currentAiSubtitle!);
+      }
+      return;
+    }
+
+    setState(() {
+      _aiSpeaking = true;
+      _mascotMood = PillMood.speaking;
+    });
+
+    await _player.setPlaybackRate(_playbackSpeed);
+    await TtsPlayback.playBase64OrUrl(
+      _player,
+      audioBase64: base64,
+      audioUrl: url,
+    );
+  }
+
+  Future<void> _playChallengeAudio(String text, {double rate = 1.0}) async {
+    try {
+      final res = await context.read<AppState>().speech.tts(text);
+      await _player.setPlaybackRate(rate);
+      setState(() {
+        _aiSpeaking = true;
+        _mascotMood = PillMood.speaking;
+      });
+      await TtsPlayback.playTts(_player, res);
+    } catch (_) {
+      _snack('Gagal muter swanten lafal.');
     }
   }
 
@@ -327,18 +479,11 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
     }
   }
 
-  Future<void> _playChallengeAudio(String text, {double rate = 1.0}) async {
-    try {
-      final res = await context.read<AppState>().speech.tts(text);
-      await _player.setPlaybackRate(rate);
-      setState(() {
-        _aiSpeaking = true;
-        _mascotMood = PillMood.speaking;
-      });
-      await TtsPlayback.playTts(_player, res);
-    } catch (_) {
-      _snack('Gagal muter swanten lafal.');
-    }
+  void _toggleSpeed() {
+    setState(() {
+      _playbackSpeed = _playbackSpeed == 1.0 ? 0.8 : 1.0;
+    });
+    _player.setPlaybackRate(_playbackSpeed);
   }
 
   void _snack(String msg) {
@@ -384,7 +529,8 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                     color: AppColors.primaryFixed,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Symbols.auto_stories, color: AppColors.primary700, size: 24),
+                  child: const Icon(Symbols.auto_stories,
+                      color: AppColors.primary700, size: 24),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -393,11 +539,13 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                     children: [
                       Text(
                         'Kosakata Pasinaon',
-                        style: AppFonts.epilogue(size: 19, weight: FontWeight.w800),
+                        style: AppFonts.epilogue(
+                            size: 18, weight: FontWeight.w800),
                       ),
                       Text(
                         '${_accumulatedVocab.length} tembung anyar kacathet',
-                        style: AppFonts.manrope(size: 13, color: AppColors.gray500),
+                        style: AppFonts.manrope(
+                            size: 13, color: AppColors.gray500),
                       ),
                     ],
                   ),
@@ -417,7 +565,8 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                 child: Center(
                   child: Text(
                     'Durung ana tembung sing kacathet ing sesi iki.',
-                    style: AppFonts.manrope(size: 14, color: AppColors.gray400),
+                    style:
+                        AppFonts.manrope(size: 14, color: AppColors.gray400),
                   ),
                 ),
               )
@@ -433,7 +582,8 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.primaryFixedDim.withValues(alpha: 0.5)),
+                        border: Border.all(
+                            color: AppColors.primaryFixedDim.withValues(alpha: 0.5)),
                       ),
                       child: Row(
                         children: [
@@ -445,14 +595,18 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                                   children: [
                                     Text(
                                       item.word,
-                                      style: AppFonts.epilogue(size: 16, weight: FontWeight.w700),
+                                      style: AppFonts.epilogue(
+                                          size: 15,
+                                          weight: FontWeight.w700),
                                     ),
                                     const SizedBox(width: 8),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: AppColors.primaryFixed,
-                                        borderRadius: BorderRadius.circular(6),
+                                        borderRadius:
+                                            BorderRadius.circular(6),
                                       ),
                                       child: Text(
                                         item.level,
@@ -468,13 +622,16 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                                 const SizedBox(height: 4),
                                 Text(
                                   item.meaning,
-                                  style: AppFonts.manrope(size: 13, color: AppColors.onSurfaceVariant),
+                                  style: AppFonts.manrope(
+                                      size: 13,
+                                      color: AppColors.onSurfaceVariant),
                                 ),
                               ],
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Symbols.volume_up_rounded, color: AppColors.primary600),
+                            icon: const Icon(Symbols.volume_up_rounded,
+                                color: AppColors.primary600),
                             onPressed: () => _playChallengeAudio(item.word),
                           ),
                         ],
@@ -483,10 +640,52 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
                   },
                 ),
               ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Tutup Rekap',
+                  style: AppFonts.epilogue(
+                    size: 14,
+                    weight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _updateTouch(Offset globalPos) {
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box != null) {
+      final local = box.globalToLocal(globalPos);
+      final center = Offset(box.size.width / 2, 220);
+      setState(() {
+        _touchOffset = local - center;
+      });
+    }
+  }
+
+  String get _statusSubtitleText {
+    if (_recording) return 'Kula mirengaken...';
+    if (_processing) return 'Mikir rumiyin...';
+    if (_aiSpeaking) return 'Si Swara lagi matur...';
+    return 'Aktif · Tutor Wicara Basa Jawa';
   }
 
   @override
@@ -498,417 +697,569 @@ class _LatihanNgomongScreenState extends State<LatihanNgomongScreen> {
           onPointerDown: (e) => _updateTouch(e.position),
           onPointerMove: (e) => _updateTouch(e.position),
           onPointerUp: (_) => setState(() => _touchOffset = null),
-          child: Column(
-            children: [
-              // 1. Header panggung minimalis ala GoPrep
-              _buildTopBar(),
-
-              // 2. Stage Utama: PreppyPill Mascot + Live LipSync + Audio Pulse Rings
-              _buildMascotStage(),
-
-              // 3. Kartu Tantangan Tirukan Suara (jika ada target lafal)
-              if (_activeRepeatChallenge != null) _buildRepeatChallengeCard(),
-
-              // 4. Area Transkrip Dialog Ringkas
-              Expanded(child: _buildTranscriptArea()),
-
-              // 5. Dock Kontrol Melayang Bawah (Mic Kapsul Besar + Hands-Free Toggle)
-              _buildControlDock(),
-            ],
+          child: Center(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 540),
+                child: _buildStageContainer(),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _updateTouch(Offset globalPos) {
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-    if (box != null) {
-      final local = box.globalToLocal(globalPos);
-      final center = Offset(box.size.width / 2, 190);
-      setState(() {
-        _touchOffset = local - center;
-      });
-    }
+  // Panggung Utama AI Voice Tutor (Single Unified Container persis versi Website)
+  Widget _buildStageContainer() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.gray200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // 1. Header Bar: Status Sambungan & Pengaturan Cepat
+          _buildHeaderBar(),
+
+          const SizedBox(height: 16),
+          const Divider(color: AppColors.gray100, height: 1, thickness: 1),
+          const SizedBox(height: 18),
+
+          // 2. Center Mascot Stage: PreppyPillAvatar Interaktif (Tombol Mic Utama)
+          _buildMascotInteractiveStage(),
+
+          const SizedBox(height: 16),
+
+          // 3. Wadah Subtitle AI (Muncul saat/setelah AI berbicara)
+          if (_currentAiSubtitle != null && _currentAiSubtitle!.isNotEmpty) ...[
+            _buildAiSubtitleCard(),
+            const SizedBox(height: 14),
+          ],
+
+          // 4. Kartu Tantangan Tirukan Lafal (Repeat Challenge Card)
+          if (_activeRepeatChallenge != null &&
+              _activeRepeatChallenge!.isNotEmpty) ...[
+            _buildRepeatChallengeCard(),
+            const SizedBox(height: 14),
+          ],
+
+          const SizedBox(height: 4),
+          const Divider(color: AppColors.gray100, height: 1, thickness: 1),
+          const SizedBox(height: 14),
+
+          // 5. Footer Bar: Toggle Hands-Free & Opsi Ketik
+          _buildFooterBar(),
+
+          // 6. Form Teks Alternatif (Muncul jika tombol ketik dipilih)
+          if (_showTextInput) ...[
+            const SizedBox(height: 14),
+            _buildTextInputForm(),
+          ],
+        ],
+      ),
+    );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          // Tombol Kembali
+  Widget _buildHeaderBar() {
+    return Row(
+      children: [
+        if (Navigator.of(context).canPop()) ...[
           GestureDetector(
-            onTap: () => Navigator.of(context).maybePop(),
+            onTap: () => Navigator.of(context).pop(),
             child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.white,
+              width: 36,
+              height: 36,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: const BoxDecoration(
+                color: AppColors.gray100,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.gray200),
               ),
-              child: const Icon(Symbols.arrow_back_rounded, size: 20, color: AppColors.onSurface),
+              child: const Icon(Symbols.arrow_back_rounded,
+                  size: 18, color: AppColors.onSurface),
             ),
           ),
-          const SizedBox(width: 10),
+        ],
 
-          // Live Pill Badge Status Sambungan
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        // Status Si Swara (Live Indicator Dot)
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(
+            color: AppColors.green500,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.green500.withValues(alpha: 0.5),
+                blurRadius: 6,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Si Swara',
+                style: AppFonts.epilogue(
+                  size: 15,
+                  weight: FontWeight.w800,
+                  color: AppColors.onSurface,
+                ),
+              ),
+              Text(
+                _statusSubtitleText,
+                style: AppFonts.manrope(
+                  size: 11.5,
+                  weight: FontWeight.w600,
+                  color: AppColors.gray500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+
+        // Kecepatan Audio (1.0x / 0.8x)
+        GestureDetector(
+          onTap: _toggleSpeed,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.gray200),
+              color: AppColors.gray100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${_playbackSpeed.toStringAsFixed(1)}x',
+              style: AppFonts.epilogue(
+                size: 12,
+                weight: FontWeight.w800,
+                color: AppColors.primary700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Rekap Kosakata Sesi
+        GestureDetector(
+          onTap: _showVocabularySheet,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.primaryFixed,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primaryFixedDim),
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.green500,
-                    shape: BoxShape.circle,
+                const Icon(Symbols.auto_stories,
+                    size: 16, color: AppColors.primary700),
+                const SizedBox(width: 4),
+                Text(
+                  'Kosakata',
+                  style: AppFonts.epilogue(
+                    size: 12,
+                    weight: FontWeight.w700,
+                    color: AppColors.primary700,
                   ),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  _aiSpeaking
-                      ? 'Si Swara matur...'
-                      : (_recording ? 'Kula mirengaken...' : 'Si Swara · Aktif'),
-                  style: AppFonts.manrope(
-                    size: 12,
-                    weight: FontWeight.w700,
-                    color: AppColors.onSurface,
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary600,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    '${_accumulatedVocab.length}',
+                    style: AppFonts.manrope(
+                      size: 10,
+                      weight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const Spacer(),
+        ),
+      ],
+    );
+  }
 
-          // Kecepatan Suara Toggle (1.0x / 0.8x)
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _playbackSpeed = _playbackSpeed == 1.0 ? 0.8 : 1.0;
-              });
-              _player.setPlaybackRate(_playbackSpeed);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.gray200),
-              ),
-              child: Text(
-                '${_playbackSpeed}x',
-                style: AppFonts.manrope(
-                  size: 12,
-                  weight: FontWeight.w800,
-                  color: AppColors.primary700,
+  // Maskot Kapsul Oval Interaktif: User pencet & tahan animasi untuk merekam, lepas auto-selesai
+  Widget _buildMascotInteractiveStage() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Listener(
+          onPointerDown: (_) => _handlePointerDown(),
+          onPointerUp: (_) => _handlePointerUp(),
+          onPointerCancel: (_) => _handlePointerCancel(),
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedScale(
+            scale: _recording ? 1.05 : 1.0,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutBack,
+            child: PreppyPillAvatar(
+              mood: _mascotMood,
+              size: 135,
+              isSpeaking: _aiSpeaking,
+              isRecording: _recording,
+              audioLevel: _audioLevel,
+              touchOffset: _touchOffset,
+              showAudioPulse: _recording || _aiSpeaking,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Badge Petunjuk Mic (Interaktif sesuai state)
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: _recording
+                ? const Color(0xFFFEF2F2)
+                : AppColors.primaryFixed,
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(
+              color: _recording
+                  ? const Color(0xFFFECACA)
+                  : AppColors.primaryFixedDim,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_processing)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary700,
+                  ),
+                )
+              else
+                Icon(
+                  _recording
+                      ? Symbols.radio_button_checked_rounded
+                      : (_aiSpeaking
+                          ? Symbols.volume_up_rounded
+                          : Symbols.mic_rounded),
+                  size: 17,
+                  color: _recording
+                      ? const Color(0xFFDC2626)
+                      : AppColors.primary700,
                 ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _recording
+                      ? 'Mirengaken... (Lepas kanggo ngirim)'
+                      : (_processing
+                          ? 'Si Swara lagi mikir wangsulan...'
+                          : (_aiSpeaking
+                              ? 'Si Swara lagi matur...'
+                              : 'Pencet & tahan Si Swara kanggo wicara')),
+                  style: AppFonts.epilogue(
+                    size: 12.5,
+                    weight: FontWeight.w700,
+                    color: _recording
+                        ? const Color(0xFFDC2626)
+                        : AppColors.primary700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Wadah Subtitle AI (Hanya Muncul Saat/Setelah AI Berbicara)
+  Widget _buildAiSubtitleCard() {
+    final text = _currentAiSubtitle;
+    if (text == null || text.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primaryFixedDim.withValues(alpha: 0.8)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            margin: const EdgeInsets.only(top: 2),
+            decoration: const BoxDecoration(
+              color: AppColors.primary600,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              'S',
+              style: AppFonts.epilogue(
+                size: 12.5,
+                weight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: AppFonts.manrope(
+                size: 13.5,
+                weight: FontWeight.w500,
+                color: AppColors.onSurface,
+                height: 1.45,
               ),
             ),
           ),
           const SizedBox(width: 8),
-
-          // Lembar Kosakata (Session Feedback ala GoPrep)
           GestureDetector(
-            onTap: _showVocabularySheet,
+            onTap: _replayCurrentSubtitleAudio,
             child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primaryFixed,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primaryFixedDim),
-              ),
-              child: const Icon(Symbols.auto_stories, size: 18, color: AppColors.primary700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMascotStage() {
-    return Container(
-      padding: const EdgeInsets.only(top: 8, bottom: 6),
-      child: Center(
-        child: PreppyPillAvatar(
-          mood: _mascotMood,
-          size: 135,
-          isSpeaking: _aiSpeaking,
-          audioLevel: _audioLevel,
-          touchOffset: _touchOffset,
-          showAudioPulse: _recording || _aiSpeaking,
-          onTap: () {
-            // Tap maskot untuk menyapa / mengganti ekspresi ceria
-            setState(() {
-              _mascotMood = PillMood.happy;
-            });
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRepeatChallengeCard() {
-    final challenge = _activeRepeatChallenge;
-    if (challenge == null) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primaryFixedDim),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary800.withValues(alpha: 0.05),
-              offset: const Offset(0, 4),
-              blurRadius: 10,
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primaryFixed,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Symbols.record_voice_over, color: AppColors.primary700, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Coba tirukna lafal iki:',
-                    style: AppFonts.manrope(
-                      size: 11,
-                      weight: FontWeight.w600,
-                      color: AppColors.gray500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    challenge,
-                    style: AppFonts.epilogue(
-                      size: 14.5,
-                      weight: FontWeight.w800,
-                      color: AppColors.primary800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Symbols.slow_motion_video_rounded, color: AppColors.primary600),
-              tooltip: 'Rungokna alon (0.8x)',
-              onPressed: () => _playChallengeAudio(challenge, rate: 0.8),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTranscriptArea() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-      itemCount: _history.length,
-      itemBuilder: (context, index) {
-        final item = _history[index];
-        if (item.isUser) {
-          return Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              constraints: const BoxConstraints(maxWidth: 280),
-              decoration: const BoxDecoration(
-                color: AppColors.primary700,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  topRight: Radius.circular(18),
-                  bottomLeft: Radius.circular(18),
-                  bottomRight: Radius.circular(4),
-                ),
-              ),
-              child: Text(
-                item.text,
-                style: AppFonts.manrope(size: 13.5, color: Colors.white, weight: FontWeight.w600),
-              ),
-            ),
-          );
-        } else {
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              constraints: const BoxConstraints(maxWidth: 290),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  topRight: Radius.circular(18),
-                  bottomRight: Radius.circular(18),
-                  bottomLeft: Radius.circular(4),
-                ),
-                border: Border.all(color: AppColors.gray200),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    offset: const Offset(0, 2),
-                    blurRadius: 6,
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primaryFixedDim),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      item.text,
-                      style: AppFonts.manrope(size: 13.5, color: AppColors.onSurface, weight: FontWeight.w500),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => _playChallengeAudio(item.text),
-                    child: const Icon(Symbols.volume_up_rounded, size: 18, color: AppColors.primary600),
-                  ),
-                ],
+              child: const Icon(
+                Symbols.volume_up_rounded,
+                size: 18,
+                color: AppColors.primary700,
               ),
             ),
-          );
-        }
-      },
-    );
-  }
-
-  Widget _buildControlDock() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            offset: const Offset(0, -4),
-            blurRadius: 14,
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    );
+  }
+
+  // Kartu Tantangan Tirukan Lafal (Repeat Challenge Card)
+  Widget _buildRepeatChallengeCard() {
+    final challenge = _activeRepeatChallenge;
+    if (challenge == null || challenge.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primaryFixedDim),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary800.withValues(alpha: 0.04),
+            offset: const Offset(0, 3),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Row(
         children: [
-          // Baris Toggle Hands-Free
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Mode Hands-Free (Otomatis)',
-                style: AppFonts.manrope(size: 12.5, weight: FontWeight.w700, color: AppColors.onSurfaceVariant),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primaryFixed,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Symbols.record_voice_over,
+                color: AppColors.primary700, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Coba tirukna ukara Jawa iki:',
+                  style: AppFonts.manrope(
+                    size: 11,
+                    weight: FontWeight.w600,
+                    color: AppColors.gray500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  challenge,
+                  style: AppFonts.epilogue(
+                    size: 14,
+                    weight: FontWeight.w800,
+                    color: AppColors.primary800,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => _playChallengeAudio(challenge, rate: 0.8),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.primaryFixedDim),
               ),
-              const SizedBox(width: 8),
-              Switch.adaptive(
+              child: const Icon(
+                Symbols.slow_motion_video_rounded,
+                size: 18,
+                color: AppColors.primary700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Footer Bar: Toggle Hands-Free & Opsi Ketik
+  Widget _buildFooterBar() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Mode Hands-Free Toggle
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Transform.scale(
+              scale: 0.8,
+              child: Switch.adaptive(
                 value: _handsFree,
                 activeTrackColor: AppColors.primary600,
                 onChanged: (val) {
                   setState(() => _handsFree = val);
                 },
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // Tombol Mic Kapsul Utama Ala GoPrep
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              // Tombol Kosakata
-              IconButton(
-                icon: const Icon(Symbols.menu_book_rounded, color: AppColors.gray500, size: 26),
-                tooltip: 'Kosakata Sesi',
-                onPressed: _showVocabularySheet,
+            ),
+            Text(
+              'Mode Hands-Free',
+              style: AppFonts.manrope(
+                size: 12,
+                weight: FontWeight.w700,
+                color: AppColors.onSurfaceVariant,
               ),
+            ),
+          ],
+        ),
 
-              // Tombol Mic Tengah Besar (Diameter 76px)
-              GestureDetector(
-                onTap: () {
-                  if (_recording) {
-                    _stopRecordingAndSend();
-                  } else {
-                    _startRecording();
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 240),
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: _recording
-                          ? [const Color(0xFFEF4444), const Color(0xFFDC2626)]
-                          : [AppColors.brand500, AppColors.primary700],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (_recording ? const Color(0xFFDC2626) : AppColors.brand500).withValues(alpha: 0.38),
-                        blurRadius: _recording ? 24 : 16,
-                        spreadRadius: _recording ? 4 : 1,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: _processing
-                        ? const SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
-                          )
-                        : Icon(
-                            _recording ? Symbols.stop_rounded : Symbols.mic_rounded,
-                            size: 36,
-                            color: Colors.white,
-                          ),
-                  ),
+        // Tombol Ganti Mode Ketik / Suara
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _showTextInput = !_showTextInput;
+            });
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _showTextInput
+                    ? Symbols.mic_rounded
+                    : Symbols.keyboard_rounded,
+                size: 16,
+                color: AppColors.primary700,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                _showTextInput ? 'Gunakan Suara' : 'Ketik Pitakon',
+                style: AppFonts.manrope(
+                  size: 12,
+                  weight: FontWeight.w800,
+                  color: AppColors.primary700,
                 ),
               ),
-
-              // Tombol Akhiri Sesi
-              IconButton(
-                icon: const Icon(Symbols.check_circle_outline_rounded, color: AppColors.green600, size: 26),
-                tooltip: 'Rampung',
-                onPressed: () {
-                  _showVocabularySheet();
-                },
-              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            _recording
-                ? 'Ngrungokake swara panjenengan...'
-                : (_processing ? 'Si Swara lagi mikir...' : 'Tutul mic kanggo wicara'),
-            style: AppFonts.manrope(size: 11.5, weight: FontWeight.w600, color: AppColors.gray500),
+        ),
+      ],
+    );
+  }
+
+  // Form Input Teks Alternatif
+  Widget _buildTextInputForm() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.gray200),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.center,
+            child: TextField(
+              controller: _textController,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _kirimTeks(),
+              style: AppFonts.manrope(size: 13, color: AppColors.onSurface),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Ketik pitakon utawa ukara Jawa...',
+                hintStyle:
+                    AppFonts.manrope(size: 12.5, color: AppColors.gray400),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: _kirimTeks,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.primary600,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Symbols.send_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -20,6 +20,7 @@ class PreppyPillAvatar extends StatefulWidget {
   final PillMood mood;
   final double size; // Lebar kapsul (tinggi = size * 1.32)
   final bool isSpeaking;
+  final bool isRecording;
   final double audioLevel; // 0.0 sampai 1.0
   final Offset? touchOffset; // Posisi sentuh relatif terhadap tengah avatar
   final bool showAudioPulse;
@@ -30,12 +31,12 @@ class PreppyPillAvatar extends StatefulWidget {
     this.mood = PillMood.neutral,
     this.size = 130.0,
     this.isSpeaking = false,
+    this.isRecording = false,
     this.audioLevel = 0.0,
     this.touchOffset,
     this.showAudioPulse = false,
     this.onTap,
   });
-
   @override
   State<PreppyPillAvatar> createState() => _PreppyPillAvatarState();
 }
@@ -182,33 +183,35 @@ class _PreppyPillAvatarState extends State<PreppyPillAvatar>
               alignment: Alignment.center,
               children: [
                 // 1. Cincin visualizer gelombang audio konsentris di belakang kapsul
-                if (widget.showAudioPulse || widget.isSpeaking)
+                if (widget.showAudioPulse || widget.isSpeaking || widget.isRecording)
                   CustomPaint(
                     size: Size(width + 70, height + 70),
                     painter: _AudioPulseRingsPainter(
                       progress: pulseVal,
                       audioLevel: widget.audioLevel,
-                      color: AppColors.primary400,
+                      color: widget.isRecording
+                          ? const Color(0xFFEF4444)
+                          : AppColors.primary400,
                     ),
                   ),
-
                 // 2. Kapsul Avatar Si Swara dengan efek mengapung (float)
                 Transform.translate(
                   offset: Offset(0, floatOffset),
-                  child: CustomPaint(
-                    size: Size(width, height),
-                    painter: _PreppyPillPainter(
-                      mood: widget.mood,
-                      isSpeaking: widget.isSpeaking || widget.mood == PillMood.speaking,
-                      blinkScale: blinkScale,
-                      lipSyncValue: lipSyncVal,
-                      audioLevel: widget.audioLevel,
-                      gazeX: _currentGazeX,
-                      gazeY: _currentGazeY,
-                    ),
+                child: CustomPaint(
+                  size: Size(width, height),
+                  painter: _PreppyPillPainter(
+                    mood: widget.mood,
+                    isSpeaking: widget.isSpeaking || widget.mood == PillMood.speaking,
+                    isRecording: widget.isRecording,
+                    blinkScale: blinkScale,
+                    lipSyncValue: lipSyncVal,
+                    audioLevel: widget.audioLevel,
+                    gazeX: _currentGazeX,
+                    gazeY: _currentGazeY,
                   ),
                 ),
-              ],
+              ),
+            ],
             ),
           );
         },
@@ -259,6 +262,7 @@ class _AudioPulseRingsPainter extends CustomPainter {
 class _PreppyPillPainter extends CustomPainter {
   final PillMood mood;
   final bool isSpeaking;
+  final bool isRecording;
   final double blinkScale;
   final double lipSyncValue;
   final double audioLevel;
@@ -268,6 +272,7 @@ class _PreppyPillPainter extends CustomPainter {
   _PreppyPillPainter({
     required this.mood,
     required this.isSpeaking,
+    this.isRecording = false,
     required this.blinkScale,
     required this.lipSyncValue,
     required this.audioLevel,
@@ -300,11 +305,13 @@ class _PreppyPillPainter extends CustomPainter {
       ).createShader(rect);
     canvas.drawRRect(pillRRect, bodyPaint);
 
-    // 3. Border Kapsul Lembut
+    // 3. Border Kapsul Lembut (merah saat merekam seperti versi web)
     final borderPaint = Paint()
-      ..color = AppColors.primary400.withValues(alpha: 0.35)
+      ..color = isRecording
+          ? const Color(0xFFEF4444)
+          : AppColors.primary400.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2;
+      ..strokeWidth = isRecording ? 2.8 : 2.2;
     canvas.drawRRect(pillRRect, borderPaint);
 
     // 4. Aksen Blangkon / Motif Tradisional Jawa di kepala kapsul
@@ -584,6 +591,7 @@ class _PreppyPillPainter extends CustomPainter {
   bool shouldRepaint(covariant _PreppyPillPainter oldDelegate) {
     return oldDelegate.mood != mood ||
         oldDelegate.isSpeaking != isSpeaking ||
+        oldDelegate.isRecording != isRecording ||
         oldDelegate.blinkScale != blinkScale ||
         oldDelegate.lipSyncValue != lipSyncValue ||
         oldDelegate.audioLevel != audioLevel ||
