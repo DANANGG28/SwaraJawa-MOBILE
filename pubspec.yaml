@@ -2,7 +2,7 @@ name: sjmobile
 description: "SINAU APP — aplikasi mobile pembelajaran Bahasa & Budaya Jawa."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.3.2 <4.0.0'
